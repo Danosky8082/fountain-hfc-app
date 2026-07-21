@@ -21,6 +21,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// --- Explicit catch-all OPTIONS handler (guarantees preflight response) ---
+app.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://fountain-hfc-app.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
 // --- Logging middleware ---
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.url} from ${req.headers.origin || 'same-origin'}`);

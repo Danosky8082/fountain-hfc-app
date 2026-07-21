@@ -15,7 +15,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+// ❌ Removed: app.options('*', cors(corsOptions));
 
 // Logging middleware (optional)
 app.use((req, res, next) => {

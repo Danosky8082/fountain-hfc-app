@@ -2,7 +2,7 @@
 ALTER TABLE "Member" DROP CONSTRAINT "Member_fellowshipId_fkey";
 
 -- DropIndex
-DROP INDEX "Fellowship_name_key";
+DROP INDEX IF EXISTS "Fellowship_name_key";
 
 -- DropIndex
 DROP INDEX "Member_email_key";

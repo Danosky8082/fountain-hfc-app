@@ -1,61 +1,51 @@
-// prisma/seed.js
-const prisma = require('../src/prisma'); // Use shared instance with adapter
+﻿const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
+const prisma = new PrismaClient();
+
 async function main() {
-  // 1. Hash password
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // 2. Create or get the fellowship
+  // Use a fixed ID for the fellowship (so we can upsert by id)
+  const fellowshipId = 'test-fellowship-id';
+
   const fellowship = await prisma.fellowship.upsert({
-    where: { name: 'Test Fellowship' },
-    update: {},
+    where: { id: fellowshipId },
+    update: {
+      name: 'Test Fellowship',
+      location: 'Lagos, Nigeria',
+    },
     create: {
+      id: fellowshipId,
       name: 'Test Fellowship',
       location: 'Lagos, Nigeria',
     },
   });
 
-  // 3. Create or update the user
-  const user = await prisma.user.upsert({
-    where: { churchId: 'FT0671NG' },
+  // Use a fixed ID for the user (so we can upsert by id)
+  const userId = 'test-user-id';
+
+  await prisma.user.upsert({
+    where: { id: userId },
     update: {
+      churchId: 'FT0671NG',
       passwordHash: hashedPassword,
       email: 'testfl@fountain.com',
       fullName: 'John Fellowship Leader',
       role: 'FL',
+      leading: { connect: { id: fellowship.id } },
     },
     create: {
+      id: userId,
       churchId: 'FT0671NG',
       email: 'testfl@fountain.com',
       fullName: 'John Fellowship Leader',
       passwordHash: hashedPassword,
       role: 'FL',
+      leading: { connect: { id: fellowship.id } },
     },
   });
 
-  // 4. Update the fellowship to set leader to this user
-  //    First, disconnect any existing leader (avoids unique constraint violation)
-  await prisma.fellowship.update({
-    where: { id: fellowship.id },
-    data: {
-      leader: {
-        disconnect: true, // removes any existing leader relation
-      },
-    },
-  });
-
-  //    Then connect the user as leader
-  await prisma.fellowship.update({
-    where: { id: fellowship.id },
-    data: {
-      leader: {
-        connect: { id: user.id },
-      },
-    },
-  });
-
-  // 5. Create sample members (skip duplicates)
   await prisma.member.createMany({
     data: [
       {

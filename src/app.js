@@ -26,6 +26,11 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/qr', qrRoutes);
 
+// Test route
+app.get('/', (req, res) => {
+  res.send('Fountain HFC API is running');
+});
+
 // Health check (uses the shared prisma)
 app.get('/api/health', async (req, res) => {
   try {

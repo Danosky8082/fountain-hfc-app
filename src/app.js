@@ -1,16 +1,15 @@
-// src/app.js
+console.log('✅ app.js is loaded and executed');
+
 const express = require('express');
 const cors = require('cors');
-const prisma = require('./prisma'); 
-
-
-
+const prisma = require('./prisma');
 require('dotenv').config();
 
 const app = express();
 
-app.get('/hello', (req, res) => {
-  res.send('Hello World');
+// Test route - placed before everything
+app.get('/ping', (req, res) => {
+  res.send('pong');
 });
 
 // Middleware

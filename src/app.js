@@ -18,11 +18,8 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-// Apply CORS middleware to all routes
+// Apply CORS middleware – this handles OPTIONS preflight automatically
 app.use(cors(corsOptions));
-
-// Explicitly handle preflight (OPTIONS) for all routes – uses correct wildcard syntax
-app.options('*', cors(corsOptions));
 
 // Request logging middleware
 app.use((req, res, next) => {

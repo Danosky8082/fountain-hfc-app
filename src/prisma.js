@@ -1,13 +1,10 @@
-// Import from the custom output path
-import { PrismaClient } from '../src/generated/prisma/client.js'
-// or for CommonJS
-// const { PrismaClient } = require('../src/generated/prisma/client')
-import { PrismaPg } from '@prisma/adapter-pg'
-import { Pool } from 'pg'
-import 'dotenv/config'
+const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
-export default prisma
+module.exports = prisma;

@@ -10,7 +10,7 @@ const corsOptions = {
   origin: [
     'https://fountain-hfc-app.vercel.app',
     'http://localhost:5173',
-    'https://fountain-hfc-app.onrender.com' // optional, for same-origin
+    'https://fountain-hfc-app.onrender.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -18,23 +18,16 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-// Apply CORS middleware to all routes
+// Apply CORS middleware to all routes – handles OPTIONS preflight automatically
 app.use(cors(corsOptions));
 
-// Explicitly handle preflight (OPTIONS) for all routes
-app.options('/*', cors(corsOptions));
-
-// Logging middleware (optional)
+// Request logging middleware
 app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.url}`);
+  console.log(`📥 ${req.method} ${req.url} from ${req.headers.origin || 'same-origin'}`);
   next();
 });
 
 app.use(express.json());
-app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.url} from ${req.headers.origin}`);
-  next();
-});
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -79,7 +72,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Global error handler
+// Global error handler (must be last)
 app.use((err, req, res, next) => {
   console.error('❌ Server Error:', err.stack);
   res.status(500).json({ 

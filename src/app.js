@@ -9,6 +9,10 @@ require('dotenv').config();
 
 const app = express();
 
+app.get('/hello', (req, res) => {
+  res.send('Hello World');
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());

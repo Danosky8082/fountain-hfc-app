@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client-js" // or "prisma-client"
+  output   = "../src/generated/prisma" // client will be generated here
 }
 
 datasource db {
   provider = "postgresql"
-  // url is now in prisma.config.ts
 }
 
 model Fellowship {

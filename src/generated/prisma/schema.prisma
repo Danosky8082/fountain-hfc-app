@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js" // or "prisma-client"
+  output   = "../src/generated/prisma" // client will be generated here
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Fellowship {
+  id          String  @id @default(cuid())
+  name        String
+  location    String
+  leaderId    String? @unique
+  associateId String? @unique
+
+  leader    User?               @relation("LeaderRelation", fields: [leaderId], references: [id])
+  associate User?               @relation("AssociateRelation", fields: [associateId], references: [id])
+  members   Member[]
+  sessions  AttendanceSession[]
+  reports   MonthlyReport[] // 👈 ADD THIS (reverse of MonthlyReport.fellowship)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id           String @id @default(cuid())
+  churchId     String @unique
+  email        String @unique
+  fullName     String
+  passwordHash String
+  role         Role   @default(FL)
+
+  leading           Fellowship?         @relation("LeaderRelation")
+  assisting         Fellowship?         @relation("AssociateRelation")
+  submittedSessions AttendanceSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Member {
+  id         String  @id @default(cuid())
+  fullName   String
+  phone      String?
+  email      String?
+  qrUniqueId String  @unique
+  isActive   Boolean @default(true)
+
+  fellowshipId      String
+  fellowship        Fellowship         @relation(fields: [fellowshipId], references: [id])
+  attendanceRecords AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AttendanceSession {
+  id           String     @id @default(cuid())
+  fellowshipId String
+  fellowship   Fellowship @relation(fields: [fellowshipId], references: [id])
+  weekNumber   Int
+  monthYear    String
+  meetingDate  DateTime
+  isSubmitted  Boolean    @default(false)
+  submittedAt  DateTime?
+  submittedBy  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  records   AttendanceRecord[]
+  submitter User?              @relation(fields: [submittedBy], references: [id])
+
+  @@unique([fellowshipId, weekNumber, monthYear])
+}
+
+model AttendanceRecord {
+  id            String            @id @default(cuid())
+  sessionId     String
+  session       AttendanceSession @relation(fields: [sessionId], references: [id])
+  memberId      String
+  member        Member            @relation(fields: [memberId], references: [id])
+  checkInMethod String
+  checkedInBy   String
+  checkedInAt   DateTime          @default(now())
+
+  @@unique([sessionId, memberId])
+}
+
+model MonthlyReport {
+  id           String     @id @default(cuid())
+  fellowshipId String
+  fellowship   Fellowship @relation(fields: [fellowshipId], references: [id])
+  monthYear    String // e.g., "2026-07"
+
+  // Week data (auto-populated from AttendanceSession)
+  week1Date  DateTime?
+  week2Date  DateTime?
+  week3Date  DateTime?
+  week4Date  DateTime?
+  week5Date  DateTime?
+  week1Count Int       @default(0)
+  week2Count Int       @default(0)
+  week3Count Int       @default(0)
+  week4Count Int       @default(0)
+  week5Count Int       @default(0)
+
+  // Form fields (filled by FL)
+  prayerFlag  Boolean @default(false)
+  firstTimers Int     @default(0)
+  newMembers  Int     @default(0)
+  followUps   Int     @default(0)
+  escalations String?
+  comments    String?
+
+  // Status
+  status      ReportStatus @default(DRAFT)
+  finalizedAt DateTime?
+  finalizedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fellowshipId, monthYear])
+}
+
+enum ReportStatus {
+  DRAFT
+  FINALIZED
+}
+
+enum Role {
+  FL
+  ASSOCIATE
+  HOD
+  ADMIN
+}

@@ -7,15 +7,22 @@ const app = express();
 
 // CORS Configuration
 const corsOptions = {
-  origin: ['https://fountain-hfc-app.vercel.app', 'http://localhost:5173'],
+  origin: [
+    'https://fountain-hfc-app.vercel.app',
+    'http://localhost:5173',
+    'https://fountain-hfc-app.onrender.com' // optional, for same-origin
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 200,
 };
 
+// Apply CORS middleware to all routes
 app.use(cors(corsOptions));
-// ❌ Removed: app.options('*', cors(corsOptions));
+
+// Explicitly handle preflight (OPTIONS) for all routes
+app.options('/*', cors(corsOptions));
 
 // Logging middleware (optional)
 app.use((req, res, next) => {
@@ -24,6 +31,10 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log(`📥 ${req.method} ${req.url} from ${req.headers.origin}`);
+  next();
+});
 
 // Routes
 const authRoutes = require('./routes/authRoutes');

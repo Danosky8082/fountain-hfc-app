@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js" // or "prisma-client"
-  output   = "../src/generated/prisma" // client will be generated here
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Fellowship {

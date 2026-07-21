@@ -15,7 +15,7 @@
   "description": "",
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.0",
-    "@prisma/client": "^7.9.0",
+    "@prisma/client": "^6.19.3",
     "@prisma/config": "^7.9.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -24,7 +24,7 @@
     "jsonwebtoken": "^9.0.3",
     "pdfkit": "^0.19.1",
     "pg": "^8.22.0",
-    "prisma": "^7.9.0",
+    "prisma": "^6.19.3",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.3"
   },

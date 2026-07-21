@@ -1,36 +1,23 @@
 const express = require('express');
-const cors = require('cors');
 const prisma = require('./prisma');
 require('dotenv').config();
 
 const app = express();
 
-// --- CORS Configuration ---
-const corsOptions = {
-  origin: [
-    'https://fountain-hfc-app.vercel.app',
-    'http://localhost:5173',
-    'https://fountain-hfc-app.onrender.com'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200,
-};
-
-// Apply CORS middleware (for non-OPTIONS requests, but it also handles OPTIONS if allowed)
-app.use(cors(corsOptions));
-
-// --- Manual OPTIONS handler (guarantees preflight response) ---
+// --- Manual CORS Middleware (runs for every request) ---
 app.use((req, res, next) => {
+  // Set CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', 'https://fountain-hfc-app.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight (OPTIONS) requests immediately
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', 'https://fountain-hfc-app.vercel.app');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.sendStatus(200);
     return;
   }
+  
   next();
 });
 

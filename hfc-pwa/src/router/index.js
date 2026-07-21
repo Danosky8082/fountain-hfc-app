@@ -44,15 +44,22 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+// Updated navigation guard – no more `next()` callback
+router.beforeEach((to, from) => {
   const authStore = useAuthStore()
+  
+  // If route requires auth and user is not authenticated
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/login')
-  } else if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    next('/dashboard')
-  } else {
-    next()
+    return '/login'
   }
+  
+  // If route requires guest (login page) and user is already authenticated
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    return '/dashboard'
+  }
+  
+  // Proceed normally
+  return true
 })
 
 export default router

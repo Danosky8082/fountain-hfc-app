@@ -1,7 +1,8 @@
 import axios from 'axios'
 
-// Use the IP address for network access, fallback to localhost for local testing
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.69.125:5000/api'
+// Use your local IP for the backend (port 5000)
+const BACKEND_URL = 'https://172.16.3.218:5000'
+const baseURL = `${BACKEND_URL}/api`
 
 const api = axios.create({
   baseURL,

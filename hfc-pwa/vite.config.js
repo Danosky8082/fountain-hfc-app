@@ -2,20 +2,26 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import fs from 'node:fs'
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    vue(),
-    vueDevTools(),
-  ],
+  plugins: [vue(), vueDevTools()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   server: {
-    host: '0.0.0.0',   // Listen on all network interfaces
-    port: 5173,         // Use port 5173 (or let Vite choose next available)
+    host: '0.0.0.0',
+    port: 5173,
+    https: {
+      key: fs.readFileSync('./172.16.3.218+1-key.pem'),
+      cert: fs.readFileSync('./172.16.3.218+1.pem'),
+    },
+    allowedHosts: [
+      '172.16.3.218',
+      'localhost',
+      '127.0.0.1',
+    ],
   },
 })

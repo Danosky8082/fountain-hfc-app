@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS Configuration
+// --- CORS Configuration ---
 const corsOptions = {
   origin: [
     'https://fountain-hfc-app.vercel.app',
@@ -18,10 +18,23 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-// Apply CORS middleware – this handles OPTIONS preflight automatically
+// Apply CORS middleware (for non-OPTIONS requests, but it also handles OPTIONS if allowed)
 app.use(cors(corsOptions));
 
-// Request logging middleware
+// --- Manual OPTIONS handler (guarantees preflight response) ---
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', 'https://fountain-hfc-app.vercel.app');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+// --- Logging middleware ---
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.url} from ${req.headers.origin || 'same-origin'}`);
   next();
@@ -29,7 +42,7 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Routes
+// --- Routes ---
 const authRoutes = require('./routes/authRoutes');
 const fellowshipRoutes = require('./routes/fellowshipRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
@@ -42,12 +55,12 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/qr', qrRoutes);
 
-// Test route
+// --- Test route ---
 app.get('/', (req, res) => {
   res.send('Fountain HFC API is running');
 });
 
-// Health check
+// --- Health check ---
 app.get('/api/health', async (req, res) => {
   try {
     const userCount = await prisma.user.count();
@@ -72,7 +85,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Global error handler (must be last)
+// --- Global error handler ---
 app.use((err, req, res, next) => {
   console.error('❌ Server Error:', err.stack);
   res.status(500).json({ 

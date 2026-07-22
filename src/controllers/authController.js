@@ -1,4 +1,3 @@
-// src/controllers/authController.js
 const prisma = require('../prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -37,8 +36,9 @@ exports.login = async (req, res) => {
       });
     }
 
+    // ✅ Allow ADMIN and HOD to login without a fellowship
     const fellowship = user.leading || user.assisting;
-    if (!fellowship) {
+    if (!fellowship && user.role !== 'ADMIN' && user.role !== 'HOD') {
       return res.status(403).json({
         success: false,
         message: 'This user is not assigned to any fellowship. Contact admin.',
@@ -49,7 +49,7 @@ exports.login = async (req, res) => {
       {
         userId: user.id,
         role: user.role,
-        fellowshipId: fellowship.id,
+        fellowshipId: fellowship?.id || null,
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
@@ -61,11 +61,13 @@ exports.login = async (req, res) => {
       message: 'Login successful',
       data: {
         user: userWithoutPassword,
-        fellowship: {
-          id: fellowship.id,
-          name: fellowship.name,
-          location: fellowship.location,
-        },
+        fellowship: fellowship
+          ? {
+              id: fellowship.id,
+              name: fellowship.name,
+              location: fellowship.location,
+            }
+          : null,
         token,
       },
     });
@@ -78,7 +80,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// ✅ NEW: Get current user from token
 exports.getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
@@ -98,25 +99,3 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
-// 5. Determine which fellowship they belong to (leader or associate)
-const fellowship = user.leading || user.assisting;
-
-// ✅ Allow ADMIN and HOD to login without a fellowship
-if (!fellowship && user.role !== 'ADMIN' && user.role !== 'HOD') {
-  return res.status(403).json({
-    success: false,
-    message: 'This user is not assigned to any fellowship. Contact admin.',
-  });
-}
-
-// 6. Generate JWT Token
-const token = jwt.sign(
-  {
-    userId: user.id,
-    role: user.role,
-    fellowshipId: fellowship?.id || null, // null for ADMIN/HOD
-  },
-  process.env.JWT_SECRET,
-  { expiresIn: '7d' }
-);

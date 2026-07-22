@@ -11,13 +11,13 @@ exports.generateMemberQR = async (req, res) => {
     const token = req.query.token || req.headers.authorization?.split(' ')[1];
 
     if (!token) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: no token provided' });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
     try {
       jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 
     const member = await prisma.member.findUnique({
@@ -29,12 +29,14 @@ exports.generateMemberQR = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Member not found' });
     }
 
+    // Generate QR code
     const qrBuffer = await QRCode.toBuffer(member.id, {
       errorCorrectionLevel: 'H',
       width: 400,
       margin: 2,
     });
 
+    // Try to overlay logo
     const logoPath = path.join(__dirname, '../../assets/logo.png');
     let finalBuffer = qrBuffer;
     if (fs.existsSync(logoPath)) {
@@ -45,7 +47,7 @@ exports.generateMemberQR = async (req, res) => {
           .png()
           .toBuffer();
       } catch (err) {
-        console.warn('Logo overlay failed, using QR without logo:', err.message);
+        console.warn('Logo overlay skipped:', err.message);
       }
     } else {
       console.warn('Logo not found at', logoPath);
@@ -54,7 +56,8 @@ exports.generateMemberQR = async (req, res) => {
     res.setHeader('Content-Type', 'image/png');
     res.send(finalBuffer);
   } catch (error) {
-    console.error('QR generation error:', error);
+    console.error('QR Error:', error);
+    // Send a proper error response – but as an image we can't easily show JSON, so we send a 500 with text.
     res.status(500).json({ success: false, message: 'QR generation failed' });
   }
 };

@@ -91,7 +91,8 @@ const showQR = (memberId) => {
     alert('You are not logged in. Please log in again.');
     return;
   }
-  window.open(`/api/qr/member/${memberId}?token=${token}`, '_blank');
+  const baseUrl = api.defaults.baseURL.replace(/\/api$/, '');
+  window.open(`${baseUrl}/api/qr/member/${memberId}?token=${token}`, '_blank');
 };
 
 const goToAdmin = () => {

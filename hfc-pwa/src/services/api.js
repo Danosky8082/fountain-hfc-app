@@ -1,8 +1,6 @@
-import axios from 'axios'
+import axios from 'axios';
 
-// Use your local IP for the backend (port 5000)
-const BACKEND_URL = 'https://172.16.3.218:5000'
-//const baseURL = `${BACKEND_URL}/api`
+// ✅ Use environment variable in production, fallback to localhost for development
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
@@ -10,14 +8,25 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-})
+});
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('jwt_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+// 🔑 Interceptor to attach JWT token to every request
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('jwt_token');
+    // Debug log – remove after confirming it works
+    console.log('🔑 Token from localStorage:', token ? '✅ Present' : '❌ Missing');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Authorization header set');
+    } else {
+      console.warn('⚠️ No token found – request will be unauthorized');
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config
-})
+);
 
-export default api
+export default api;

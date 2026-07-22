@@ -1,5 +1,5 @@
 // src/controllers/authController.js
-const prisma = require('../prisma'); // <-- FIXED: using shared instance
+const prisma = require('../prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -7,7 +7,6 @@ exports.login = async (req, res) => {
   try {
     const { churchId, password } = req.body;
 
-    // 1. Validate input
     if (!churchId || !password) {
       return res.status(400).json({
         success: false,
@@ -15,16 +14,14 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 2. Find the user in the database by churchId
     const user = await prisma.user.findUnique({
       where: { churchId: churchId.trim() },
       include: {
-        leading: true,   // Get the fellowship they lead (if any)
-        assisting: true, // Get the fellowship they assist (if any)
+        leading: true,
+        assisting: true,
       },
     });
 
-    // 3. If user doesn't exist
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -32,7 +29,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 4. Compare the provided password with the stored hash
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -41,7 +37,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 5. Determine which fellowship they belong to (leader or associate)
     const fellowship = user.leading || user.assisting;
     if (!fellowship) {
       return res.status(403).json({
@@ -50,7 +45,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 6. Generate JWT Token (expires in 7 days)
     const token = jwt.sign(
       {
         userId: user.id,
@@ -61,7 +55,6 @@ exports.login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // 7. Send success response (exclude password hash)
     const { passwordHash, ...userWithoutPassword } = user;
     res.status(200).json({
       success: true,
@@ -82,5 +75,26 @@ exports.login = async (req, res) => {
       success: false,
       message: 'Internal server error. Please try again later.',
     });
+  }
+};
+
+// ✅ NEW: Get current user from token
+exports.getMe = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      include: {
+        leading: true,
+        assisting: true,
+      },
+    });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const { passwordHash, ...userWithoutPassword } = user;
+    res.status(200).json({ success: true, data: userWithoutPassword });
+  } catch (error) {
+    console.error('GetMe error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };

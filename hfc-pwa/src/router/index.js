@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -60,34 +60,38 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
     },
   ],
-})
+});
 
-// Updated navigation guard – no more `next()` callback
-router.beforeEach((to, from) => {
-  const authStore = useAuthStore()
-  
-  // If route requires auth and user is not authenticated
+router.beforeEach(async (to, from) => {
+  const authStore = useAuthStore();
+
+  // If route requires authentication, check if we need to restore session
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return '/login'
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+      const restored = await authStore.restoreSession();
+      if (!restored) {
+        return '/login';
+      }
+    } else {
+      return '/login';
+    }
   }
-  
-  // If route requires guest (login page) and user is already authenticated
+
+  // If route requires guest (login page) and user is authenticated
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    return '/dashboard'
+    return '/dashboard';
   }
 
-  // If route requires HOD role and user is not HOD
-  if (to.meta.requiresHOD && authStore.user?.role !== 'HOD') {
-    return '/dashboard'
+  // Role-based restrictions
+  if (to.meta.requiresHOD && authStore.user?.role !== 'HOD' && authStore.user?.role !== 'ADMIN') {
+    return '/dashboard';
   }
-
-  // If route requires Admin role and user is not Admin
   if (to.meta.requiresAdmin && authStore.user?.role !== 'ADMIN') {
-    return '/dashboard'
+    return '/dashboard';
   }
-  
-  // Proceed normally
-  return true
-})
 
-export default router
+  return true;
+});
+
+export default router;

@@ -72,9 +72,10 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
-  // Double-check token presence
-  if (!authStore.token) {
-    console.warn('⏳ Token not yet available – skipping fetch');
+  // Ensure we have a token before making the request
+  const token = authStore.token || localStorage.getItem('jwt_token');
+  if (!token) {
+    console.warn('⏳ No token available – skipping fetch');
     loading.value = false;
     return;
   }
@@ -108,19 +109,20 @@ const goToAdmin = () => {
   router.push('/admin');
 };
 
-// ✅ Watch for token – fetch members as soon as it becomes available
+// 👇 Watch both token and authentication status
 watch(
-  () => authStore.token,
-  (newToken) => {
-    if (newToken) {
+  () => [authStore.token, authStore.isAuthenticated],
+  ([token, isAuth]) => {
+    if (isAuth && token) {
       fetchMembers();
     }
   },
-  { immediate: true }  // triggers immediately on mount
+  { immediate: true, deep: true }
 );
 
-// Also restore session on mount to ensure token is loaded from localStorage
+// Also restore session on mount to load token from localStorage if available
 onMounted(async () => {
   await authStore.restoreSession();
+  // After restoration, if token exists, fetch will be triggered by the watch
 });
 </script>

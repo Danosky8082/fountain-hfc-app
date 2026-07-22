@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { login as apiLogin, getToken, removeToken } from '../services/auth';
-import api from '../services/api'; // Needed for restoreSession
+import api from '../services/api';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null);

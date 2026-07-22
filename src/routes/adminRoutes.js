@@ -9,4 +9,6 @@ router.use(verifyToken);
 router.post('/fellowship', adminController.createFellowship);
 router.post('/member', adminController.createMember);
 
+router.get('/members', adminController.getAllMembers);
+
 module.exports = router;

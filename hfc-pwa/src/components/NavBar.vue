@@ -37,6 +37,9 @@
               >Attendance</router-link
             >
           </li>
+          <li class="nav-item" v-if="authStore.user?.role === 'ADMIN'">
+  <router-link class="nav-link" to="/members">Members</router-link>
+</li>
           <li class="nav-item">
             <router-link class="nav-link" to="/report">Report</router-link>
           </li>

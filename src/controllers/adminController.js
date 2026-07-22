@@ -24,3 +24,17 @@ exports.createMember = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.getAllMembers = async (req, res) => {
+  try {
+    const members = await prisma.member.findMany({
+      include: {
+        fellowship: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    res.status(200).json({ success: true, data: members });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

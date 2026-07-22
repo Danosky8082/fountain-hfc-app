@@ -562,3 +562,25 @@ exports.generatePDF = async (req, res) => {
     }
   }
 };
+
+exports.exportCSV = async (req, res) => {
+  try {
+    const { monthYear } = req.query;
+    const reports = await prisma.monthlyReport.findMany({
+      where: { monthYear },
+      include: { fellowship: true },
+      orderBy: { fellowship: { name: 'asc' } },
+    });
+
+    let csv = 'Fellowship,Month,Week1,Week2,Week3,Week4,Week5,Status\n';
+    reports.forEach(r => {
+      csv += `${r.fellowship.name},${r.monthYear},${r.week1Count},${r.week2Count},${r.week3Count},${r.week4Count},${r.week5Count},${r.status}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=reports_${monthYear}.csv`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

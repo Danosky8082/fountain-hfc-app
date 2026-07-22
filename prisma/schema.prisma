@@ -46,7 +46,7 @@ model Member {
   phone         String?
   email         String?
   qrUniqueId    String   @unique
-  memberNumber  String?  @unique   // 👈 NEW: optional custom ID
+  memberNumber  String?  @unique   // <-- Add this field
   isActive      Boolean  @default(true)
 
   fellowshipId  String

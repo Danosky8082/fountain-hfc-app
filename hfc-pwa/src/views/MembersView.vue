@@ -86,7 +86,6 @@ const fetchMembers = async () => {
 };
 
 const showQR = (memberId) => {
-  // Pass the JWT token as a query parameter so the image can be fetched directly
   const token = authStore.token;
   if (!token) {
     alert('You are not logged in. Please log in again.');

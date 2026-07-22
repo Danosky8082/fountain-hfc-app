@@ -165,11 +165,13 @@ const checkIn = async (memberId) => {
 
 // Show QR code for a member (opens in a new tab)
 const showQR = (memberId) => {
-  // Use the backend base URL from the API config
-  const baseUrl = api.defaults.baseURL.replace(/\/api$/, '');
-  window.open(`${baseUrl}/api/qr/member/${memberId}`, "_blank");
+  const token = authStore.token;
+  if (!token) {
+    alert('You are not logged in. Please log in again.');
+    return;
+  }
+  window.open(`/api/qr/member/${memberId}?token=${token}`, '_blank');
 };
-
 // Add member using the new endpoint
 const addMember = async () => {
   addingMember.value = true;

@@ -18,7 +18,7 @@ model Fellowship {
   associate     User?    @relation("AssociateRelation", fields: [associateId], references: [id])
   members       Member[]
   sessions      AttendanceSession[]
-  reports       MonthlyReport[]   // 👈 ADD THIS (reverse of MonthlyReport.fellowship)
+  reports       MonthlyReport[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -46,10 +46,12 @@ model Member {
   phone         String?
   email         String?
   qrUniqueId    String   @unique
+  memberNumber  String?  @unique   // 👈 NEW: optional custom ID
   isActive      Boolean  @default(true)
 
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
+
   attendanceRecords AttendanceRecord[]
 
   createdAt     DateTime @default(now())
@@ -92,9 +94,8 @@ model MonthlyReport {
   id            String   @id @default(cuid())
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
-  monthYear     String   // e.g., "2026-07"
+  monthYear     String
   
-  // Week data (auto-populated from AttendanceSession)
   week1Date     DateTime?
   week2Date     DateTime?
   week3Date     DateTime?
@@ -106,7 +107,6 @@ model MonthlyReport {
   week4Count    Int      @default(0)
   week5Count    Int      @default(0)
   
-  // Form fields (filled by FL)
   prayerFlag    Boolean  @default(false)
   firstTimers   Int      @default(0)
   newMembers    Int      @default(0)
@@ -114,7 +114,6 @@ model MonthlyReport {
   escalations   String?
   comments      String?
   
-  // Status
   status        ReportStatus @default(DRAFT)
   finalizedAt   DateTime?
   finalizedBy   String?

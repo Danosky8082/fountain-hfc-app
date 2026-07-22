@@ -36,6 +36,7 @@ const attendanceRoutes = require('./routes/attendanceRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const qrRoutes = require('./routes/qrRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const memberRoutes = require('./routes/memberRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/fellowship', fellowshipRoutes);
@@ -43,6 +44,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/members', memberRoutes);
 
 // --- Test route ---
 app.get('/', (req, res) => {

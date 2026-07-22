@@ -68,6 +68,11 @@
             <label class="form-label">Email</label>
             <input v-model="newMember.email" type="email" class="form-control" />
           </div>
+          <!-- NEW: Optional Member Number -->
+          <div class="mb-2">
+            <label class="form-label">Member Number (optional)</label>
+            <input v-model="newMember.memberNumber" type="text" class="form-control" placeholder="e.g., M001" />
+          </div>
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-success" :disabled="addingMember">
               <span v-if="addingMember" class="spinner-border spinner-border-sm me-2"></span>
@@ -98,7 +103,8 @@ const showAddMemberModal = ref(false);
 const addingMember = ref(false);
 const memberAddMessage = ref('');
 const memberAddClass = ref('text-success');
-const newMember = ref({ fullName: '', phone: '', email: '' });
+// Added memberNumber field
+const newMember = ref({ fullName: '', phone: '', email: '', memberNumber: '' });
 
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
@@ -160,25 +166,23 @@ const checkIn = async (memberId) => {
 // Show QR code for a member (opens in a new tab)
 const showQR = (memberId) => {
   // Use the backend base URL from the API config
-  // Assuming api.defaults.baseURL is set (e.g., https://fountain-hfc.onrender.com/api)
-  // We strip '/api' from the base to get the root, then append the qr endpoint
   const baseUrl = api.defaults.baseURL.replace(/\/api$/, '');
   window.open(`${baseUrl}/api/qr/member/${memberId}`, "_blank");
 };
 
-// Add member
+// Add member using the new endpoint
 const addMember = async () => {
   addingMember.value = true;
   memberAddMessage.value = '';
   try {
-    const res = await api.post('/admin/member', {
+    const res = await api.post('/members', {
       ...newMember.value,
       fellowshipId: authStore.fellowship.id // auto-assign to the FL's fellowship
     });
     if (res.data.success) {
       memberAddMessage.value = `✅ "${res.data.data.fullName}" added!`;
       memberAddClass.value = 'text-success';
-      newMember.value = { fullName: '', phone: '', email: '' };
+      newMember.value = { fullName: '', phone: '', email: '', memberNumber: '' };
       await fetchMembers(); // refresh the list
       setTimeout(() => {
         showAddMemberModal.value = false;

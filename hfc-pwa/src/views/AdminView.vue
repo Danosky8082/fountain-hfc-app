@@ -54,26 +54,30 @@
         <form @submit.prevent="createMember">
           <div class="row">
             <div class="col-md-3 mb-2">
-              <label class="form-label">Full Name</label>
+              <label class="form-label">Full Name *</label>
               <input v-model="memberForm.fullName" type="text" class="form-control" required />
             </div>
             <div class="col-md-2 mb-2">
               <label class="form-label">Phone</label>
               <input v-model="memberForm.phone" type="text" class="form-control" />
             </div>
-            <div class="col-md-3 mb-2">
+            <div class="col-md-2 mb-2">
               <label class="form-label">Email</label>
               <input v-model="memberForm.email" type="email" class="form-control" />
             </div>
             <div class="col-md-2 mb-2">
-              <label class="form-label">Fellowship</label>
+              <label class="form-label">Fellowship *</label>
               <select v-model="memberForm.fellowshipId" class="form-control" required>
                 <option value="" disabled>Select Fellowship</option>
                 <option v-for="f in fellowships" :key="f.id" :value="f.id">{{ f.name }}</option>
               </select>
             </div>
-            <div class="col-md-2 mb-2 d-flex align-items-end">
-              <button type="submit" class="btn btn-primary w-100" :disabled="memberLoading">
+            <div class="col-md-2 mb-2">
+              <label class="form-label">Member Number (optional)</label>
+              <input v-model="memberForm.memberNumber" type="text" class="form-control" placeholder="e.g., M001" />
+            </div>
+            <div class="col-md-12 mb-2">
+              <button type="submit" class="btn btn-primary" :disabled="memberLoading">
                 <span v-if="memberLoading" class="spinner-border spinner-border-sm me-2"></span>
                 Add Member
               </button>
@@ -106,7 +110,7 @@
               <label class="form-label">Password</label>
               <input v-model="userForm.password" type="password" class="form-control" required />
             </div>
-            <div class="col-md-2 mb-2">
+            <div class="col-md-3 mb-2">
               <label class="form-label">Role</label>
               <select v-model="userForm.role" class="form-control" required>
                 <option value="">Select Role</option>
@@ -116,10 +120,11 @@
                 <option value="ADMIN">Admin</option>
               </select>
             </div>
-            <div class="col-md-1 mb-2 d-flex align-items-end">
-              <button type="submit" class="btn btn-warning w-100" :disabled="userLoading">
+            <!-- Button row (full width) -->
+            <div class="col-12 mb-2">
+              <button type="submit" class="btn btn-warning" :disabled="userLoading">
                 <span v-if="userLoading" class="spinner-border spinner-border-sm me-2"></span>
-                Create
+                Create User
               </button>
             </div>
           </div>
@@ -144,7 +149,7 @@ const fellowshipMessage = ref('');
 const fellowshipMessageClass = ref('text-success');
 
 // ---- Member ----
-const memberForm = ref({ fullName: '', phone: '', email: '', fellowshipId: '' });
+const memberForm = ref({ fullName: '', phone: '', email: '', fellowshipId: '', memberNumber: '' });
 const memberLoading = ref(false);
 const memberMessage = ref('');
 const memberMessageClass = ref('text-success');
@@ -203,11 +208,11 @@ const createMember = async () => {
   memberLoading.value = true;
   memberMessage.value = '';
   try {
-    const res = await api.post('/admin/member', memberForm.value);
+    const res = await api.post('/members', memberForm.value);
     if (res.data.success) {
       memberMessage.value = `✅ Member "${res.data.data.fullName}" added!`;
       memberMessageClass.value = 'text-success';
-      memberForm.value = { fullName: '', phone: '', email: '', fellowshipId: '' };
+      memberForm.value = { fullName: '', phone: '', email: '', fellowshipId: '', memberNumber: '' };
     } else {
       memberMessage.value = '❌ ' + res.data.message;
       memberMessageClass.value = 'text-danger';
@@ -230,7 +235,7 @@ const createUser = async () => {
       userMessage.value = `✅ User "${res.data.data.churchId}" created with role ${res.data.data.role}`;
       userMessageClass.value = 'text-success';
       userForm.value = { churchId: '', fullName: '', email: '', password: '', role: '' };
-      await fetchUsers(); // refresh dropdowns
+      await fetchUsers();
     } else {
       userMessage.value = '❌ ' + res.data.message;
       userMessageClass.value = 'text-danger';

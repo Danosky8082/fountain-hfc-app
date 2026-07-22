@@ -74,7 +74,7 @@
             </div>
             <div class="col-md-2 mb-2">
               <label class="form-label">Member Number (optional)</label>
-              <input v-model="memberForm.memberNumber" type="text" class="form-control" placeholder="e.g., M001" />
+              <input v-model="memberForm.memberNumber" type="text" class="form-control" placeholder="e.g., FT0621NG" />
             </div>
             <div class="col-md-12 mb-2">
               <button type="submit" class="btn btn-primary" :disabled="memberLoading">

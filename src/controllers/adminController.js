@@ -6,7 +6,6 @@ exports.createFellowship = async (req, res) => {
   try {
     const { name, location, leaderId, associateId } = req.body;
 
-    // Check if leaderId is already assigned
     if (leaderId) {
       const existingLeader = await prisma.fellowship.findFirst({
         where: { leaderId: leaderId },
@@ -41,7 +40,6 @@ exports.createFellowship = async (req, res) => {
 
     res.status(201).json({ success: true, data: fellowship });
   } catch (error) {
-    // Handle unique constraint error
     if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,

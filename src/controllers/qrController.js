@@ -29,8 +29,15 @@ exports.generateMemberQR = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Member not found' });
     }
 
-    // Generate QR code
-    const qrBuffer = await QRCode.toBuffer(member.id, {
+    // ✅ QR data now includes member info
+    const qrData = JSON.stringify({
+      id: member.id,
+      name: member.fullName,
+      fellowship: member.fellowship?.name || 'Unknown',
+    });
+
+    // Generate QR code with the enriched data
+    const qrBuffer = await QRCode.toBuffer(qrData, {
       errorCorrectionLevel: 'H',
       width: 400,
       margin: 2,
@@ -57,7 +64,6 @@ exports.generateMemberQR = async (req, res) => {
     res.send(finalBuffer);
   } catch (error) {
     console.error('QR Error:', error);
-    // Send a proper error response – but as an image we can't easily show JSON, so we send a 500 with text.
     res.status(500).json({ success: false, message: 'QR generation failed' });
   }
 };

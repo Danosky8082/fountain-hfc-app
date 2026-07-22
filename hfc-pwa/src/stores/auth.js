@@ -1,14 +1,13 @@
-// src/stores/auth.js
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import api from '../services/api';
 import { login as apiLogin, getToken, removeToken } from '../services/auth';
+import api from '../services/api'; // Needed for restoreSession
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null);
   const fellowship = ref(null);
-  const token = ref(getToken());
-  const isAuthenticated = ref(!!token.value);
+  const token = ref(null);
+  const isAuthenticated = ref(false);
 
   const login = async (churchId, password) => {
     try {
@@ -35,6 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = false;
   };
 
+  // ✅ Restore session from token (calls /auth/me)
   const restoreSession = async () => {
     const storedToken = getToken();
     if (!storedToken) {
@@ -67,6 +67,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   };
 
+  // checkToken now performs full session restoration
   const checkToken = async () => {
     await restoreSession();
   };

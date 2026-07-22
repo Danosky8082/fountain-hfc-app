@@ -72,7 +72,7 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
-  // Only fetch if authenticated
+  // Double-check authentication before making the request
   if (!authStore.isAuthenticated) {
     console.warn('Not authenticated, skipping fetch');
     loading.value = false;
@@ -107,16 +107,20 @@ const goToAdmin = () => {
   router.push('/admin');
 };
 
-onMounted(() => {
+onMounted(async () => {
+  // 1. Ensure session is restored (token is in localStorage and user data is loaded)
+  await authStore.restoreSession();
+  
+  // 2. If authenticated, fetch members; otherwise, wait for authentication
   if (authStore.isAuthenticated) {
-    fetchMembers();
+    await fetchMembers();
   } else {
-    // Wait for authentication to become true
+    // Watch for authentication to become true
     const unwatch = watch(
       () => authStore.isAuthenticated,
-      (val) => {
+      async (val) => {
         if (val) {
-          fetchMembers();
+          await fetchMembers();
           unwatch();
         }
       },

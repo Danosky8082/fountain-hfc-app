@@ -1,6 +1,12 @@
 <template>
   <div class="container mt-4">
-    <h4>📋 Manual Check-in</h4>
+    <!-- Header with Add Member button -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>📋 Manual Check-in</h4>
+      <button class="btn btn-primary btn-sm" @click="showAddMemberModal = true">
+        ➕ Add Member
+      </button>
+    </div>
     <p class="text-muted">
       Select members present (for those who lost their QR cards).
     </p>
@@ -44,6 +50,35 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Member Modal -->
+    <div v-if="showAddMemberModal" class="modal-overlay" @click.self="showAddMemberModal = false">
+      <div class="modal-content">
+        <h5>Add New Member</h5>
+        <form @submit.prevent="addMember">
+          <div class="mb-2">
+            <label class="form-label">Full Name *</label>
+            <input v-model="newMember.fullName" type="text" class="form-control" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Phone</label>
+            <input v-model="newMember.phone" type="text" class="form-control" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Email</label>
+            <input v-model="newMember.email" type="email" class="form-control" />
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success" :disabled="addingMember">
+              <span v-if="addingMember" class="spinner-border spinner-border-sm me-2"></span>
+              Add Member
+            </button>
+            <button type="button" class="btn btn-secondary" @click="showAddMemberModal = false">Cancel</button>
+          </div>
+        </form>
+        <div v-if="memberAddMessage" class="mt-2" :class="memberAddClass">{{ memberAddMessage }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -57,6 +92,13 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
 const search = ref("");
+
+// Modal state
+const showAddMemberModal = ref(false);
+const addingMember = ref(false);
+const memberAddMessage = ref('');
+const memberAddClass = ref('text-success');
+const newMember = ref({ fullName: '', phone: '', email: '' });
 
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
@@ -117,11 +159,73 @@ const checkIn = async (memberId) => {
 
 // Show QR code for a member (opens in a new tab)
 const showQR = (memberId) => {
-  // Use your backend IP/port – adjust if needed
-  window.open(`http://192.168.69.125:5000/api/qr/member/${memberId}`, "_blank");
+  // Use the backend base URL from the API config
+  // Assuming api.defaults.baseURL is set (e.g., https://fountain-hfc.onrender.com/api)
+  // We strip '/api' from the base to get the root, then append the qr endpoint
+  const baseUrl = api.defaults.baseURL.replace(/\/api$/, '');
+  window.open(`${baseUrl}/api/qr/member/${memberId}`, "_blank");
+};
+
+// Add member
+const addMember = async () => {
+  addingMember.value = true;
+  memberAddMessage.value = '';
+  try {
+    const res = await api.post('/admin/member', {
+      ...newMember.value,
+      fellowshipId: authStore.fellowship.id // auto-assign to the FL's fellowship
+    });
+    if (res.data.success) {
+      memberAddMessage.value = `✅ "${res.data.data.fullName}" added!`;
+      memberAddClass.value = 'text-success';
+      newMember.value = { fullName: '', phone: '', email: '' };
+      await fetchMembers(); // refresh the list
+      setTimeout(() => {
+        showAddMemberModal.value = false;
+        memberAddMessage.value = '';
+      }, 2000);
+    } else {
+      memberAddMessage.value = '❌ ' + res.data.message;
+      memberAddClass.value = 'text-danger';
+    }
+  } catch (error) {
+    memberAddMessage.value = '❌ Error: ' + (error.response?.data?.message || error.message);
+    memberAddClass.value = 'text-danger';
+  } finally {
+    addingMember.value = false;
+  }
 };
 
 onMounted(() => {
   fetchMembers();
 });
 </script>
+
+<style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+/* Touch-friendly button size */
+button {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+</style>

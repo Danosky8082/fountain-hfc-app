@@ -9,3 +9,10 @@ body {
   max-width: 400px;
   margin: 0 auto;
 }
+
+/* In your global CSS or component style */
+button {
+  min-height: 44px;
+  /* Apple's recommended touch target size */
+  touch-action: manipulation;
+}

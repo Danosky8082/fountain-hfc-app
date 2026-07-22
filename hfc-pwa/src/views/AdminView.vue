@@ -73,10 +73,15 @@
               </select>
             </div>
             <div class="col-md-2 mb-2 d-flex align-items-end">
-              <button type="submit" class="btn btn-primary w-100" :disabled="memberLoading">
-                <span v-if="memberLoading" class="spinner-border spinner-border-sm me-2"></span>
-                Add Member
-              </button>
+              <button 
+  type="submit" 
+  class="btn btn-primary w-100" 
+  :disabled="memberLoading"
+  @click.prevent="createMember"
+>
+  <span v-if="memberLoading" class="spinner-border spinner-border-sm me-2"></span>
+  Add Member
+</button>
             </div>
           </div>
         </form>

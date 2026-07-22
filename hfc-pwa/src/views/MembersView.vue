@@ -59,7 +59,7 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
 const search = ref('');
-const initialized = ref(false); // track if restoreSession has run
+let fetchAttempted = false;
 
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
@@ -73,12 +73,20 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
-  // Double-check token presence
-  const token = authStore.token || localStorage.getItem('jwt_token');
+  if (fetchAttempted) return;
+  fetchAttempted = true;
+
+  // Wait up to 500ms for the token to appear
+  let token = authStore.token || localStorage.getItem('jwt_token');
   if (!token) {
-    console.warn('⏳ No token available – skipping fetch');
-    loading.value = false;
-    return;
+    console.warn('⏳ Waiting for token...');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    token = authStore.token || localStorage.getItem('jwt_token');
+    if (!token) {
+      console.warn('⏳ Still no token – aborting fetch.');
+      loading.value = false;
+      return;
+    }
   }
 
   loading.value = true;
@@ -111,22 +119,15 @@ const goToAdmin = () => {
 };
 
 onMounted(async () => {
-  // 1. Restore session (load token from localStorage)
   await authStore.restoreSession();
-  initialized.value = true;
-
-  // 2. If token is now present, fetch members
-  if (authStore.token) {
-    await fetchMembers();
-  }
+  // Wait a moment before fetching
+  setTimeout(fetchMembers, 300);
 });
 
-// 3. Watch for future token changes (e.g., after login)
 watch(
   () => authStore.token,
   (newToken) => {
-    // Only fetch if the initial restore has finished and token is present
-    if (initialized.value && newToken) {
+    if (newToken && !fetchAttempted) {
       fetchMembers();
     }
   }

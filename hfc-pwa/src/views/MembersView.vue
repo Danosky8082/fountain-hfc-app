@@ -72,12 +72,13 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
-  // Double-check authentication before making the request
-  if (!authStore.isAuthenticated) {
-    console.warn('Not authenticated, skipping fetch');
+  // Double-check token presence
+  if (!authStore.token) {
+    console.warn('⏳ Token not yet available – skipping fetch');
     loading.value = false;
     return;
   }
+
   loading.value = true;
   try {
     const res = await api.get('/admin/members');
@@ -107,25 +108,19 @@ const goToAdmin = () => {
   router.push('/admin');
 };
 
+// ✅ Watch for token – fetch members as soon as it becomes available
+watch(
+  () => authStore.token,
+  (newToken) => {
+    if (newToken) {
+      fetchMembers();
+    }
+  },
+  { immediate: true }  // triggers immediately on mount
+);
+
+// Also restore session on mount to ensure token is loaded from localStorage
 onMounted(async () => {
-  // 1. Ensure session is restored (token is in localStorage and user data is loaded)
   await authStore.restoreSession();
-  
-  // 2. If authenticated, fetch members; otherwise, wait for authentication
-  if (authStore.isAuthenticated) {
-    await fetchMembers();
-  } else {
-    // Watch for authentication to become true
-    const unwatch = watch(
-      () => authStore.isAuthenticated,
-      async (val) => {
-        if (val) {
-          await fetchMembers();
-          unwatch();
-        }
-      },
-      { immediate: false }
-    );
-  }
 });
 </script>

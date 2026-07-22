@@ -2,21 +2,21 @@
   <div class="container mt-4">
     <h4>📷 Check-in Options</h4>
 
-    <!-- Show when camera is supported -->
     <div v-if="!scanError">
       <p class="text-muted">Point your camera at a member's QR code.</p>
       <div id="qr-reader" class="qr-reader"></div>
     </div>
 
-    <!-- Error State -->
     <div v-if="scanError" class="alert alert-warning mt-3">
       <h5>⚠️ Camera Not Available</h5>
       <p>{{ scanError }}</p>
-      <p class="small">This usually happens when the page is loaded over HTTP instead of HTTPS, or permissions are blocked.</p>
+      <p class="small">
+        This usually happens when the page is loaded over HTTP instead of HTTPS, or permissions are blocked.
+      </p>
       <button class="btn btn-primary btn-sm" @click="goToManual">Go to Manual Check-in</button>
     </div>
 
-    <!-- Manual Member ID Input (Fallback) -->
+    <!-- Manual fallback -->
     <div class="mt-3">
       <label class="form-label">Or enter Member ID manually:</label>
       <div class="input-group">
@@ -45,25 +45,23 @@ const scanError = ref(null)
 const manualMemberId = ref('')
 let html5QrCode = null
 
-// Cleanup function to safely stop and clear the scanner
+// ✅ Safe cleanup – stop first, then clear
 const stopScanner = async () => {
   if (html5QrCode) {
     try {
-      // Check if scanner is currently scanning
-      const isScanning = html5QrCode.isScanning
-      if (isScanning) {
+      // Check if scanning is active
+      if (html5QrCode.isScanning) {
         await html5QrCode.stop()
       }
       await html5QrCode.clear()
-    } catch (error) {
-      console.warn('Scanner cleanup warning:', error.message)
+    } catch (err) {
+      console.warn('Scanner cleanup warning:', err.message)
     }
     html5QrCode = null
   }
 }
 
 onMounted(() => {
-  // Check if camera is supported
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     scanError.value = 'Camera not supported on this device/browser.'
     return
@@ -106,7 +104,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // Clean up scanner on component unmount
+  // ✅ Clean up on unmount
   stopScanner()
 })
 
@@ -125,7 +123,7 @@ const markPresent = async () => {
     if (response.data.success) {
       alert('✅ Check-in successful!')
       scanResult.value = null
-      // Restart scanner after check-in
+      // Restart scanner after check‑in
       if (html5QrCode && !html5QrCode.isScanning) {
         html5QrCode.start(
           { facingMode: 'environment' },
@@ -168,3 +166,7 @@ const markManualPresent = async () => {
   }
 }
 </script>
+
+<style scoped>
+/* optional styling */
+</style>

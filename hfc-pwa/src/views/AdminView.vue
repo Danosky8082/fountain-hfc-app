@@ -1,9 +1,9 @@
 <template>
   <div class="container mt-4">
     <h4>⚙️ Admin Dashboard</h4>
-    <p class="text-muted">Create new fellowships and members.</p>
+    <p class="text-muted">Manage fellowships, members, and system users.</p>
 
-    <!-- === Create Fellowship Form === -->
+    <!-- === Create Fellowship === -->
     <div class="card mb-4">
       <div class="card-header bg-primary text-white">Create Fellowship</div>
       <div class="card-body">
@@ -47,8 +47,8 @@
       </div>
     </div>
 
-    <!-- === Create Member Form === -->
-    <div class="card">
+    <!-- === Add Member === -->
+    <div class="card mb-4">
       <div class="card-header bg-success text-white">Add Member</div>
       <div class="card-body">
         <form @submit.prevent="createMember">
@@ -73,19 +73,58 @@
               </select>
             </div>
             <div class="col-md-2 mb-2 d-flex align-items-end">
-              <button 
-  type="submit" 
-  class="btn btn-primary w-100" 
-  :disabled="memberLoading"
-  @click.prevent="createMember"
->
-  <span v-if="memberLoading" class="spinner-border spinner-border-sm me-2"></span>
-  Add Member
-</button>
+              <button type="submit" class="btn btn-primary w-100" :disabled="memberLoading">
+                <span v-if="memberLoading" class="spinner-border spinner-border-sm me-2"></span>
+                Add Member
+              </button>
             </div>
           </div>
         </form>
         <div v-if="memberMessage" class="mt-2" :class="memberMessageClass">{{ memberMessage }}</div>
+      </div>
+    </div>
+
+    <!-- === Create System User === -->
+    <div class="card mb-4">
+      <div class="card-header bg-warning text-dark">Create System User</div>
+      <div class="card-body">
+        <form @submit.prevent="createUser">
+          <div class="row">
+            <div class="col-md-2 mb-2">
+              <label class="form-label">Church ID</label>
+              <input v-model="userForm.churchId" type="text" class="form-control" required />
+            </div>
+            <div class="col-md-3 mb-2">
+              <label class="form-label">Full Name</label>
+              <input v-model="userForm.fullName" type="text" class="form-control" required />
+            </div>
+            <div class="col-md-2 mb-2">
+              <label class="form-label">Email</label>
+              <input v-model="userForm.email" type="email" class="form-control" required />
+            </div>
+            <div class="col-md-2 mb-2">
+              <label class="form-label">Password</label>
+              <input v-model="userForm.password" type="password" class="form-control" required />
+            </div>
+            <div class="col-md-2 mb-2">
+              <label class="form-label">Role</label>
+              <select v-model="userForm.role" class="form-control" required>
+                <option value="">Select Role</option>
+                <option value="FL">Fellowship Leader</option>
+                <option value="ASSOCIATE">Associate FL</option>
+                <option value="HOD">Head of Department</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </div>
+            <div class="col-md-1 mb-2 d-flex align-items-end">
+              <button type="submit" class="btn btn-warning w-100" :disabled="userLoading">
+                <span v-if="userLoading" class="spinner-border spinner-border-sm me-2"></span>
+                Create
+              </button>
+            </div>
+          </div>
+        </form>
+        <div v-if="userMessage" class="mt-2" :class="userMessageClass">{{ userMessage }}</div>
       </div>
     </div>
   </div>
@@ -96,19 +135,25 @@ import { ref, onMounted } from 'vue';
 import api from '../services/api';
 
 const fellowships = ref([]);
-const users = ref([]); // for leader/associate dropdowns
+const users = ref([]);
 
-// Fellowship form
+// ---- Fellowship ----
 const fellowshipForm = ref({ name: '', location: '', leaderId: '', associateId: '' });
 const fellowshipLoading = ref(false);
 const fellowshipMessage = ref('');
 const fellowshipMessageClass = ref('text-success');
 
-// Member form
+// ---- Member ----
 const memberForm = ref({ fullName: '', phone: '', email: '', fellowshipId: '' });
 const memberLoading = ref(false);
 const memberMessage = ref('');
 const memberMessageClass = ref('text-success');
+
+// ---- User ----
+const userForm = ref({ churchId: '', fullName: '', email: '', password: '', role: '' });
+const userLoading = ref(false);
+const userMessage = ref('');
+const userMessageClass = ref('text-success');
 
 // Fetch fellowships for dropdown
 const fetchFellowships = async () => {
@@ -120,7 +165,7 @@ const fetchFellowships = async () => {
   }
 };
 
-// Fetch users with FL/ASSOCIATE roles
+// Fetch users (FL/ASSOCIATE) for leader/associate dropdowns
 const fetchUsers = async () => {
   try {
     const res = await api.get('/admin/users');
@@ -130,7 +175,7 @@ const fetchUsers = async () => {
   }
 };
 
-// Create fellowship
+// ---- Create Fellowship ----
 const createFellowship = async () => {
   fellowshipLoading.value = true;
   fellowshipMessage.value = '';
@@ -140,7 +185,7 @@ const createFellowship = async () => {
       fellowshipMessage.value = `✅ Fellowship "${res.data.data.name}" created!`;
       fellowshipMessageClass.value = 'text-success';
       fellowshipForm.value = { name: '', location: '', leaderId: '', associateId: '' };
-      await fetchFellowships(); // refresh dropdown
+      await fetchFellowships();
     } else {
       fellowshipMessage.value = '❌ ' + res.data.message;
       fellowshipMessageClass.value = 'text-danger';
@@ -153,7 +198,7 @@ const createFellowship = async () => {
   }
 };
 
-// Create member
+// ---- Create Member ----
 const createMember = async () => {
   memberLoading.value = true;
   memberMessage.value = '';
@@ -172,6 +217,29 @@ const createMember = async () => {
     memberMessageClass.value = 'text-danger';
   } finally {
     memberLoading.value = false;
+  }
+};
+
+// ---- Create System User ----
+const createUser = async () => {
+  userLoading.value = true;
+  userMessage.value = '';
+  try {
+    const res = await api.post('/admin/user', userForm.value);
+    if (res.data.success) {
+      userMessage.value = `✅ User "${res.data.data.churchId}" created with role ${res.data.data.role}`;
+      userMessageClass.value = 'text-success';
+      userForm.value = { churchId: '', fullName: '', email: '', password: '', role: '' };
+      await fetchUsers(); // refresh dropdowns
+    } else {
+      userMessage.value = '❌ ' + res.data.message;
+      userMessageClass.value = 'text-danger';
+    }
+  } catch (error) {
+    userMessage.value = '❌ Error: ' + (error.response?.data?.message || error.message);
+    userMessageClass.value = 'text-danger';
+  } finally {
+    userLoading.value = false;
   }
 };
 

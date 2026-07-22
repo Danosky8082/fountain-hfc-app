@@ -17,6 +17,24 @@
               <label class="form-label">Location</label>
               <input v-model="fellowshipForm.location" type="text" class="form-control" required />
             </div>
+            <div class="col-md-4 mb-2">
+              <label class="form-label">Leader</label>
+              <select v-model="fellowshipForm.leaderId" class="form-control">
+                <option value="">Select Leader</option>
+                <option v-for="u in users" :key="u.id" :value="u.id">
+                  {{ u.fullName }} ({{ u.churchId }})
+                </option>
+              </select>
+            </div>
+            <div class="col-md-4 mb-2">
+              <label class="form-label">Associate Leader</label>
+              <select v-model="fellowshipForm.associateId" class="form-control">
+                <option value="">Select Associate</option>
+                <option v-for="u in users" :key="u.id" :value="u.id">
+                  {{ u.fullName }} ({{ u.churchId }})
+                </option>
+              </select>
+            </div>
             <div class="col-md-4 mb-2 d-flex align-items-end">
               <button type="submit" class="btn btn-success w-100" :disabled="fellowshipLoading">
                 <span v-if="fellowshipLoading" class="spinner-border spinner-border-sm me-2"></span>
@@ -73,9 +91,10 @@ import { ref, onMounted } from 'vue';
 import api from '../services/api';
 
 const fellowships = ref([]);
+const users = ref([]); // for leader/associate dropdowns
 
 // Fellowship form
-const fellowshipForm = ref({ name: '', location: '' });
+const fellowshipForm = ref({ name: '', location: '', leaderId: '', associateId: '' });
 const fellowshipLoading = ref(false);
 const fellowshipMessage = ref('');
 const fellowshipMessageClass = ref('text-success');
@@ -86,13 +105,23 @@ const memberLoading = ref(false);
 const memberMessage = ref('');
 const memberMessageClass = ref('text-success');
 
-// Fetch all fellowships for dropdown
+// Fetch fellowships for dropdown
 const fetchFellowships = async () => {
   try {
-    const res = await api.get('/fellowship/list'); // we need to add this endpoint
+    const res = await api.get('/fellowship/list');
     if (res.data.success) fellowships.value = res.data.data;
   } catch (error) {
     console.error('Failed to load fellowships', error);
+  }
+};
+
+// Fetch users with FL/ASSOCIATE roles
+const fetchUsers = async () => {
+  try {
+    const res = await api.get('/admin/users');
+    if (res.data.success) users.value = res.data.data;
+  } catch (error) {
+    console.error('Failed to load users', error);
   }
 };
 
@@ -105,7 +134,7 @@ const createFellowship = async () => {
     if (res.data.success) {
       fellowshipMessage.value = `✅ Fellowship "${res.data.data.name}" created!`;
       fellowshipMessageClass.value = 'text-success';
-      fellowshipForm.value = { name: '', location: '' };
+      fellowshipForm.value = { name: '', location: '', leaderId: '', associateId: '' };
       await fetchFellowships(); // refresh dropdown
     } else {
       fellowshipMessage.value = '❌ ' + res.data.message;
@@ -143,5 +172,6 @@ const createMember = async () => {
 
 onMounted(() => {
   fetchFellowships();
+  fetchUsers();
 });
 </script>

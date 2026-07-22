@@ -4,7 +4,12 @@ exports.createFellowship = async (req, res) => {
   try {
     const { name, location, leaderId, associateId } = req.body;
     const fellowship = await prisma.fellowship.create({
-      data: { name, location, leaderId, associateId },
+      data: {
+        name,
+        location,
+        leaderId: leaderId || null,
+        associateId: associateId || null,
+      },
     });
     res.status(201).json({ success: true, data: fellowship });
   } catch (error) {
@@ -34,6 +39,25 @@ exports.getAllMembers = async (req, res) => {
       orderBy: { fullName: 'asc' },
     });
     res.status(200).json({ success: true, data: members });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+exports.getUsersByRole = async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        role: { in: ['FL', 'ASSOCIATE'] },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        churchId: true,
+        role: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    res.status(200).json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

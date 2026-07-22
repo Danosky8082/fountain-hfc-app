@@ -8,6 +8,7 @@ router.use(verifyToken);
 
 router.post('/fellowship', adminController.createFellowship);
 router.post('/member', adminController.createMember);
+router.get('/users', adminController.getUsersByRole);
 
 router.get('/members', adminController.getAllMembers);
 

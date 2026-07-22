@@ -7,7 +7,7 @@
     <p class="text-muted">Full list of members across all fellowships.</p>
 
     <div class="mb-3">
-      <input v-model="search" type="text" class="form-control" placeholder="Search by name..." />
+      <input v-model="search" type="text" class="form-control" placeholder="Search by name, phone, email, or fellowship..." />
     </div>
 
     <div v-if="loading || !authStore.token" class="text-center"><LoadingSpinner /></div>
@@ -53,13 +53,15 @@ const loading = ref(true);
 const members = ref([]);
 const search = ref('');
 
+// ✅ Filter by name, phone, email, and fellowship name
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
   const s = search.value.toLowerCase();
   return members.value.filter(m =>
     m.fullName.toLowerCase().includes(s) ||
     (m.phone && m.phone.includes(s)) ||
-    (m.email && m.email.toLowerCase().includes(s))
+    (m.email && m.email.toLowerCase().includes(s)) ||
+    (m.fellowship?.name && m.fellowship.name.toLowerCase().includes(s))
   );
 });
 
@@ -76,7 +78,6 @@ const fetchMembers = async () => {
   }
 };
 
-// 👇 Automatically fetch whenever token becomes available
 watchEffect(() => {
   if (authStore.token) fetchMembers();
 });
@@ -91,6 +92,6 @@ const showQR = (memberId) => {
 const goToAdmin = () => router.push('/admin');
 
 onMounted(async () => {
-  await authStore.restoreSession(); // load token from localStorage
+  await authStore.restoreSession();
 });
 </script>

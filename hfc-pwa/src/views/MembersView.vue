@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../services/api';
@@ -72,11 +72,19 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
+  // Only fetch if authenticated
+  if (!authStore.isAuthenticated) {
+    console.warn('Not authenticated, skipping fetch');
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   try {
     const res = await api.get('/admin/members');
     if (res.data.success) {
       members.value = res.data.data;
+    } else {
+      console.error('Failed to fetch members:', res.data.message);
     }
   } catch (error) {
     console.error('Failed to fetch members', error);
@@ -100,6 +108,20 @@ const goToAdmin = () => {
 };
 
 onMounted(() => {
-  fetchMembers();
+  if (authStore.isAuthenticated) {
+    fetchMembers();
+  } else {
+    // Wait for authentication to become true
+    const unwatch = watch(
+      () => authStore.isAuthenticated,
+      (val) => {
+        if (val) {
+          fetchMembers();
+          unwatch();
+        }
+      },
+      { immediate: false }
+    );
+  }
 });
 </script>

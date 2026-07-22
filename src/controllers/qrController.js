@@ -37,7 +37,7 @@ exports.generateMemberQR = async (req, res) => {
     });
 
     // Try to overlay logo
-    const logoPath = path.join(__dirname, '../../assets/logo.png');
+    const logoPath = path.join(__dirname, '../../assets/fountain.jpg');
     let finalBuffer = qrBuffer;
     if (fs.existsSync(logoPath)) {
       try {

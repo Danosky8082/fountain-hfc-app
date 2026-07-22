@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../services/api';
@@ -59,7 +59,7 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
 const search = ref('');
-let fetchAttempted = false;
+const fetchAttempted = ref(false);
 
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
@@ -73,22 +73,15 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
-  if (fetchAttempted) return;
-  fetchAttempted = true;
+  if (fetchAttempted.value) return;
 
-  // Wait up to 500ms for the token to appear
-  let token = authStore.token || localStorage.getItem('jwt_token');
+  const token = authStore.token || localStorage.getItem('jwt_token');
   if (!token) {
-    console.warn('⏳ Waiting for token...');
-    await new Promise(resolve => setTimeout(resolve, 500));
-    token = authStore.token || localStorage.getItem('jwt_token');
-    if (!token) {
-      console.warn('⏳ Still no token – aborting fetch.');
-      loading.value = false;
-      return;
-    }
+    console.warn('⏳ No token available – waiting for token...');
+    return;
   }
 
+  fetchAttempted.value = true;
   loading.value = true;
   try {
     const res = await api.get('/admin/members');
@@ -118,18 +111,17 @@ const goToAdmin = () => {
   router.push('/admin');
 };
 
-onMounted(async () => {
-  await authStore.restoreSession();
-  // Wait a moment before fetching
-  setTimeout(fetchMembers, 300);
+// ✅ WatchEffect: automatically fetch when token becomes available
+watchEffect(() => {
+  if (authStore.token && !fetchAttempted.value) {
+    fetchMembers();
+  }
 });
 
-watch(
-  () => authStore.token,
-  (newToken) => {
-    if (newToken && !fetchAttempted) {
-      fetchMembers();
-    }
-  }
-);
+onMounted(async () => {
+  // Restore session (load token from localStorage)
+  await authStore.restoreSession();
+  // If token is already present, watchEffect will trigger fetch
+  // If not, it will wait for the token to appear (e.g., after login)
+});
 </script>

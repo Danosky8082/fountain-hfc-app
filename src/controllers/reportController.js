@@ -584,3 +584,71 @@ exports.exportCSV = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Inside src/controllers/reportController.js, in exports.updateReport
+
+// After updating the report to FINALIZED
+if (action === 'FINALIZE') {
+  try {
+    // 1. Generate PDF buffer
+    const { generatePDFBuffer } = require('../utils/pdfGenerator');
+    const pdfBuffer = await generatePDFBuffer(id);
+
+    // 2. Get all HODs (and optionally the FL)
+    const hods = await prisma.user.findMany({
+      where: { role: 'HOD' },
+      select: { email: true, fullName: true },
+    });
+
+    // 3. Send email to each HOD
+    const emailService = require('../services/emailService');
+    const reportData = updated; // the updated report
+
+    for (const hod of hods) {
+      if (hod.email) {
+        await emailService.sendReportEmail({
+          to: hod.email,
+          subject: `📊 Monthly Report - ${reportData.fellowship.name} (${reportData.monthYear})`,
+          html: `
+            <h2>Monthly Report Finalized</h2>
+            <p><strong>Fellowship:</strong> ${reportData.fellowship.name}</p>
+            <p><strong>Month:</strong> ${reportData.monthYear}</p>
+            <p><strong>Status:</strong> ${reportData.status}</p>
+            <p>Please find the full PDF attached.</p>
+            <hr />
+            <p><em>This email was sent automatically by the Fountain HFC system.</em></p>
+          `,
+          pdfBuffer,
+          filename: `HFC_Report_${reportData.fellowship.name}_${reportData.monthYear}.pdf`,
+        });
+      }
+    }
+
+    // Also send a confirmation to the FL who submitted it
+    const submitter = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, fullName: true },
+    });
+
+    if (submitter?.email) {
+      await emailService.sendReportEmail({
+        to: submitter.email,
+        subject: `✅ Report Finalized - ${reportData.fellowship.name} (${reportData.monthYear})`,
+        html: `
+          <h2>Your Report Has Been Finalized</h2>
+          <p><strong>Fellowship:</strong> ${reportData.fellowship.name}</p>
+          <p><strong>Month:</strong> ${reportData.monthYear}</p>
+          <p>Thank you for submitting your report. The HODs have been notified.</p>
+          <p>Attached is a copy of your final report for your records.</p>
+          <hr />
+          <p><em>This email was sent automatically by the Fountain HFC system.</em></p>
+        `,
+        pdfBuffer,
+        filename: `HFC_Report_${reportData.fellowship.name}_${reportData.monthYear}.pdf`,
+      });
+    }
+  } catch (emailError) {
+    console.error('❌ Email notification failed:', emailError);
+    // Don't fail the whole request if email fails – just log it.
+  }
+}

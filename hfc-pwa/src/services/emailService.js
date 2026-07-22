@@ -1,46 +1,51 @@
 const nodemailer = require('nodemailer');
 
-// Configure your SMTP (e.g., Gmail, SendGrid)
+// Create transporter using SMTP
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: process.env.SMTP_PORT || 587,
-  secure: false, // true for 465
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  tls: {
+    rejectUnauthorized: false, // optional for self-signed certs
+  },
 });
 
 /**
- * Send a monthly report via email
+ * Send an email with a PDF attachment
  * @param {string} to - recipient email
- * @param {object} reportData - report object
+ * @param {string} subject - email subject
+ * @param {string} html - email body (HTML)
  * @param {Buffer} pdfBuffer - PDF file buffer
+ * @param {string} filename - PDF filename
  */
-exports.sendReportEmail = async (to, reportData, pdfBuffer) => {
+exports.sendReportEmail = async ({
+  to,
+  subject,
+  html,
+  pdfBuffer,
+  filename,
+}) => {
   try {
     const info = await transporter.sendMail({
-      from: `"Fountain HFC" <${process.env.SMTP_USER}>`,
+      from: process.env.SMTP_FROM || `"Fountain HFC" <${process.env.SMTP_USER}>`,
       to,
-      subject: `Monthly Report - ${reportData.monthYear}`,
-      html: `
-        <h2>Monthly Home Fellowship Report</h2>
-        <p><strong>Fellowship:</strong> ${reportData.fellowship.name}</p>
-        <p><strong>Month:</strong> ${reportData.monthYear}</p>
-        <p><strong>Status:</strong> ${reportData.status}</p>
-        <p>Please find the detailed PDF attached.</p>
-      `,
+      subject,
+      html,
       attachments: [
         {
-          filename: `HFC_Report_${reportData.fellowship.name}_${reportData.monthYear}.pdf`,
+          filename: filename || 'monthly_report.pdf',
           content: pdfBuffer,
         },
       ],
     });
-    console.log('Email sent:', info.messageId);
-    return { success: true };
+    console.log(`✅ Email sent to ${to}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Email error:', error);
+    console.error('❌ Email error:', error);
     return { success: false, error: error.message };
   }
 };

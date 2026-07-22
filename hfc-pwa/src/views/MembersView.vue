@@ -1,13 +1,23 @@
 <template>
   <div class="container mt-4">
-    <h4>👥 All Members (Register)</h4>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>👥 All Members (Register)</h4>
+      <button class="btn btn-primary" @click="goToAdmin">➕ Add Member</button>
+    </div>
     <p class="text-muted">Full list of members across all fellowships.</p>
 
     <div class="mb-3">
-      <input v-model="search" type="text" class="form-control" placeholder="Search by name, phone, or email..." />
+      <input
+        v-model="search"
+        type="text"
+        class="form-control"
+        placeholder="Search by name, phone, or email..."
+      />
     </div>
 
-    <div v-if="loading" class="text-center"><LoadingSpinner /></div>
+    <div v-if="loading" class="text-center">
+      <LoadingSpinner />
+    </div>
     <div v-else-if="members.length === 0" class="alert alert-info">No members found.</div>
     <div v-else>
       <table class="table table-bordered table-striped table-hover">
@@ -38,8 +48,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner.vue';
+
+const router = useRouter();
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const members = ref([]);
@@ -48,17 +63,18 @@ const search = ref('');
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
   const s = search.value.toLowerCase();
-  return members.value.filter(m =>
-    m.fullName.toLowerCase().includes(s) ||
-    (m.phone && m.phone.includes(s)) ||
-    (m.email && m.email.toLowerCase().includes(s))
+  return members.value.filter(
+    (m) =>
+      m.fullName.toLowerCase().includes(s) ||
+      (m.phone && m.phone.includes(s)) ||
+      (m.email && m.email.toLowerCase().includes(s))
   );
 });
 
 const fetchMembers = async () => {
   loading.value = true;
   try {
-    const res = await api.get('/admin/members'); // new endpoint
+    const res = await api.get('/admin/members');
     if (res.data.success) {
       members.value = res.data.data;
     }
@@ -70,8 +86,20 @@ const fetchMembers = async () => {
 };
 
 const showQR = (memberId) => {
-  window.open(`/api/qr/member/${memberId}`, '_blank');
+  // Pass the JWT token as a query parameter so the image can be fetched directly
+  const token = authStore.token;
+  if (!token) {
+    alert('You are not logged in. Please log in again.');
+    return;
+  }
+  window.open(`/api/qr/member/${memberId}?token=${token}`, '_blank');
 };
 
-onMounted(fetchMembers);
+const goToAdmin = () => {
+  router.push('/admin');
+};
+
+onMounted(() => {
+  fetchMembers();
+});
 </script>

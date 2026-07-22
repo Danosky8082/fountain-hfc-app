@@ -6,7 +6,7 @@ exports.createFellowship = async (req, res) => {
   try {
     const { name, location, leaderId, associateId } = req.body;
 
-    // Optional: Check if leaderId is already assigned
+    // Check if leaderId is already assigned
     if (leaderId) {
       const existingLeader = await prisma.fellowship.findFirst({
         where: { leaderId: leaderId },
@@ -50,17 +50,31 @@ exports.createFellowship = async (req, res) => {
     }
     res.status(500).json({ success: false, message: error.message });
   }
+};
 
 // ---- Create Member ----
 exports.createMember = async (req, res) => {
   try {
-    const { fullName, phone, email, fellowshipId } = req.body;
+    const { fullName, phone, email, fellowshipId, memberNumber } = req.body;
     const qrUniqueId = `MEMBER-${Date.now()}`;
     const member = await prisma.member.create({
-      data: { fullName, phone, email, fellowshipId, qrUniqueId },
+      data: {
+        fullName,
+        phone: phone || null,
+        email: email || null,
+        fellowshipId,
+        qrUniqueId,
+        memberNumber: memberNumber || null,
+      },
     });
     res.status(201).json({ success: true, data: member });
   } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        success: false,
+        message: 'The member number or QR ID is already taken.',
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -79,7 +93,10 @@ exports.createUser = async (req, res) => {
         role,
       },
     });
-    res.status(201).json({ success: true, data: { id: user.id, churchId: user.churchId, role: user.role } });
+    res.status(201).json({
+      success: true,
+      data: { id: user.id, churchId: user.churchId, role: user.role },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -88,15 +105,9 @@ exports.createUser = async (req, res) => {
 // ---- Get Users by Role (for dropdowns) ----
 exports.getUsersByRole = async (req, res) => {
   try {
-    // Fetch users with role FL or ASSOCIATE, but exclude those already assigned
     const users = await prisma.user.findMany({
       where: {
         role: { in: ['FL', 'ASSOCIATE'] },
-        // Exclude users who are already a leader or associate
-        OR: [
-          { leading: null }, // not leading any fellowship
-          { assisting: null }, // not assisting any fellowship
-        ],
       },
       select: {
         id: true,
@@ -106,16 +117,13 @@ exports.getUsersByRole = async (req, res) => {
       },
       orderBy: { fullName: 'asc' },
     });
-    // Note: This logic might exclude users who are assigned as leader but not associate, etc.
-    // Better: Use a subquery or handle in frontend with a separate endpoint.
-    // For simplicity, we'll just send all users and handle error messages.
     res.status(200).json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ---- (Optional) Get all members ----
+// ---- Get all members (for Members page) ----
 exports.getAllMembers = async (req, res) => {
   try {
     const members = await prisma.member.findMany({

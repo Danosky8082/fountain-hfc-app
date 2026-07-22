@@ -225,6 +225,9 @@ exports.updateReport = async (req, res) => {
  * Query params: ?monthYear=2026-07
  */
 exports.getAllReports = async (req, res) => {
+  if (role !== 'HOD' && role !== 'ADMIN') {
+    return res.status(403).json({ success: false, message: 'Unauthorized' });
+  }
   try {
     const { role } = req.user;
     const { monthYear } = req.query;

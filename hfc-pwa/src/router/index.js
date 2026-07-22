@@ -41,6 +41,18 @@ const router = createRouter({
       component: () => import('../views/ReportView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/hod-dashboard',
+      name: 'HODDashboard',
+      component: () => import('../views/HODDashboardView.vue'),
+      meta: { requiresAuth: true, requiresHOD: true },
+    },
+    {
+      path: '/admin',
+      name: 'Admin',
+      component: () => import('../views/AdminView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
   ],
 })
 
@@ -55,6 +67,16 @@ router.beforeEach((to, from) => {
   
   // If route requires guest (login page) and user is already authenticated
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    return '/dashboard'
+  }
+
+  // If route requires HOD role and user is not HOD
+  if (to.meta.requiresHOD && authStore.user?.role !== 'HOD') {
+    return '/dashboard'
+  }
+
+  // If route requires Admin role and user is not Admin
+  if (to.meta.requiresAdmin && authStore.user?.role !== 'ADMIN') {
     return '/dashboard'
   }
   

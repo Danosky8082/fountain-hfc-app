@@ -13,4 +13,6 @@ router.get('/members', verifyToken, fellowshipController.getMembers);
 // GET /api/fellowship/details - Get fellowship info (name, location)
 router.get('/details', verifyToken, fellowshipController.getFellowshipDetails);
 
+router.get('/list', verifyToken, fellowshipController.getAllFellowships);
+
 module.exports = router;

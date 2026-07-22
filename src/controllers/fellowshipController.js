@@ -91,3 +91,15 @@ exports.getFellowshipDetails = async (req, res) => {
     });
   }
 };
+
+exports.getAllFellowships = async (req, res) => {
+  try {
+    const fellowships = await prisma.fellowship.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
+    res.status(200).json({ success: true, data: fellowships });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

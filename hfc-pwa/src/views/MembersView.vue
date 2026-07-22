@@ -59,6 +59,7 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
 const search = ref('');
+const initialized = ref(false); // track if restoreSession has run
 
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
@@ -72,7 +73,7 @@ const filteredMembers = computed(() => {
 });
 
 const fetchMembers = async () => {
-  // Ensure we have a token before making the request
+  // Double-check token presence
   const token = authStore.token || localStorage.getItem('jwt_token');
   if (!token) {
     console.warn('⏳ No token available – skipping fetch');
@@ -109,20 +110,25 @@ const goToAdmin = () => {
   router.push('/admin');
 };
 
-// 👇 Watch both token and authentication status
+onMounted(async () => {
+  // 1. Restore session (load token from localStorage)
+  await authStore.restoreSession();
+  initialized.value = true;
+
+  // 2. If token is now present, fetch members
+  if (authStore.token) {
+    await fetchMembers();
+  }
+});
+
+// 3. Watch for future token changes (e.g., after login)
 watch(
-  () => [authStore.token, authStore.isAuthenticated],
-  ([token, isAuth]) => {
-    if (isAuth && token) {
+  () => authStore.token,
+  (newToken) => {
+    // Only fetch if the initial restore has finished and token is present
+    if (initialized.value && newToken) {
       fetchMembers();
     }
-  },
-  { immediate: true, deep: true }
+  }
 );
-
-// Also restore session on mount to load token from localStorage if available
-onMounted(async () => {
-  await authStore.restoreSession();
-  // After restoration, if token exists, fetch will be triggered by the watch
-});
 </script>

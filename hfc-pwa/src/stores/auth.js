@@ -14,7 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
       const result = await apiLogin(churchId, password);
       if (result.success) {
         user.value = result.user;
-        fellowship.value = result.fellowship;
+        fellowship.value = result.fellowship || null;
         token.value = result.token;
         isAuthenticated.value = true;
         return { success: true };

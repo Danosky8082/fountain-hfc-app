@@ -98,3 +98,25 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// 5. Determine which fellowship they belong to (leader or associate)
+const fellowship = user.leading || user.assisting;
+
+// ✅ Allow ADMIN and HOD to login without a fellowship
+if (!fellowship && user.role !== 'ADMIN' && user.role !== 'HOD') {
+  return res.status(403).json({
+    success: false,
+    message: 'This user is not assigned to any fellowship. Contact admin.',
+  });
+}
+
+// 6. Generate JWT Token
+const token = jwt.sign(
+  {
+    userId: user.id,
+    role: user.role,
+    fellowshipId: fellowship?.id || null, // null for ADMIN/HOD
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: '7d' }
+);

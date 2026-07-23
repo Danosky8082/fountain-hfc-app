@@ -1,12 +1,20 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
-import 'bootstrap/dist/css/bootstrap.min.css'
-import 'bootstrap/dist/js/bootstrap.bundle.min.js'
-import './assets/main.css'
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import App from './App.vue';
+import router from './router';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import './assets/main.css';
 
-const app = createApp(App)
-app.use(createPinia())
-app.use(router)
-app.mount('#app')
+// ─── Pinia instance ─────────────────────────────────────────────
+const pinia = createPinia();
+
+const app = createApp(App);
+
+app.use(pinia);
+app.use(router);
+
+// 👇 Expose pinia for debugging (remove later)
+window.__pinia = pinia;
+
+app.mount('#app');

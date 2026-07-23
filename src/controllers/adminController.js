@@ -275,3 +275,77 @@ exports.deleteFellowship = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ─── Correct past attendance ────────────────────────────────────
+exports.correctAttendance = async (req, res) => {
+  try {
+    const { fellowshipId, weekNumber, monthYear, memberId, checkInMethod } = req.body;
+
+    // Validate
+    if (!fellowshipId || !weekNumber || !monthYear || !memberId || !checkInMethod) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: fellowshipId, weekNumber, monthYear, memberId, checkInMethod',
+      });
+    }
+    if (!['MANUAL', 'QR_SCAN', 'VIRTUAL', 'PIN_CHECKIN'].includes(checkInMethod)) {
+      return res.status(400).json({ success: false, message: 'Invalid checkInMethod' });
+    }
+
+    // 1. Find or create the attendance session for that week
+    let session = await prisma.attendanceSession.findUnique({
+      where: {
+        fellowshipId_weekNumber_monthYear: {
+          fellowshipId,
+          weekNumber,
+          monthYear,
+        },
+      },
+    });
+
+    if (!session) {
+      // Create a session if it doesn't exist (mark as not submitted)
+      session = await prisma.attendanceSession.create({
+        data: {
+          fellowshipId,
+          weekNumber,
+          monthYear,
+          meetingDate: new Date(),
+          isSubmitted: false,
+        },
+      });
+    }
+
+    // 2. Upsert the attendance record
+    const record = await prisma.attendanceRecord.upsert({
+      where: {
+        sessionId_memberId: {
+          sessionId: session.id,
+          memberId,
+        },
+      },
+      update: {
+        checkInMethod,
+        checkedInBy: req.user.userId,
+        checkedInAt: new Date(),
+      },
+      create: {
+        sessionId: session.id,
+        memberId,
+        checkInMethod,
+        checkedInBy: req.user.userId,
+      },
+    });
+
+    // 3. Optionally, mark the session as submitted if all members are present? – we don't auto-submit.
+
+    res.status(200).json({
+      success: true,
+      message: 'Attendance corrected.',
+      data: record,
+    });
+  } catch (error) {
+    console.error('Correct attendance error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

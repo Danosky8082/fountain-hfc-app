@@ -13,12 +13,13 @@ export const useAuthStore = defineStore('auth', () => {
   const login = async (churchId, password) => {
     try {
       const result = await apiLogin(churchId, password);
+      console.log('🔍 Login result:', result);
       if (result.success) {
         user.value = result.user;
         fellowship.value = result.fellowship || null;
         token.value = result.token;
         isAuthenticated.value = true;
-        console.log('✅ Login success – user:', user.value);
+        console.log('✅ user set:', user.value);
         return { success: true };
       } else {
         return { success: false, message: result.message };

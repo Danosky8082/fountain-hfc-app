@@ -42,6 +42,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/report/:id',
+      name: 'ReportDetail',
+      component: () => import('../views/ReportView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/hod-dashboard',
       name: 'HODDashboard',
       component: () => import('../views/HODDashboardView.vue'),
@@ -90,13 +96,6 @@ router.beforeEach(async (to, from) => {
   if (to.meta.requiresAdmin && authStore.user?.role !== 'ADMIN') {
     return '/dashboard';
   }
-
-  {
-  path: '/report/:id',
-  name: 'ReportDetail',
-  component: () => import('../views/ReportView.vue'),
-  meta: { requiresAuth: true },
-}
 
   return true;
 });

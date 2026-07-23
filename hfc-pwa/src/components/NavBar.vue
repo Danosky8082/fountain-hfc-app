@@ -15,6 +15,7 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav me-auto">
+          <!-- ─── Core Fellowship Leader functions ─── -->
           <li class="nav-item">
             <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
           </li>
@@ -27,27 +28,20 @@
           <li class="nav-item">
             <router-link class="nav-link" to="/attendance">Attendance</router-link>
           </li>
-
-          <!-- Members – Admin only -->
-          <li class="nav-item" v-if="isAdmin">
-            <router-link class="nav-link" to="/members">Members</router-link>
-          </li>
-
           <li class="nav-item">
             <router-link class="nav-link" to="/report">Report</router-link>
           </li>
 
-          <!-- Users – Admin or HOD -->
+          <!-- ─── Admin / HOD functions (grouped) ─── -->
+          <li class="nav-item" v-if="isAdmin">
+            <router-link class="nav-link" to="/members">Members</router-link>
+          </li>
           <li class="nav-item" v-if="isAdminOrHod">
             <router-link class="nav-link" to="/admin/users">👥 Users</router-link>
           </li>
-
-          <!-- Correction – Admin or HOD -->
           <li class="nav-item" v-if="isAdminOrHod">
             <router-link class="nav-link" to="/admin/correction">📝 Correction</router-link>
           </li>
-
-          <!-- HOD Dashboard – Admin or HOD -->
           <li class="nav-item" v-if="isAdminOrHod">
             <router-link class="nav-link" to="/hod-dashboard">📊 HOD Dashboard</router-link>
           </li>

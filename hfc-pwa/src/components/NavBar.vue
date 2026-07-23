@@ -43,6 +43,9 @@
           <li class="nav-item">
             <router-link class="nav-link" to="/report">Report</router-link>
           </li>
+          <li class="nav-item" v-if="authStore.user?.role === 'HOD' || authStore.user?.role === 'ADMIN'">
+  <router-link class="nav-link" to="/admin/correction">📝 Correction</router-link>
+</li>
         </ul>
         <button class="btn btn-outline-light" @click="logout">Logout</button>
       </div>

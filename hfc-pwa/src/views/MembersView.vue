@@ -16,6 +16,7 @@
       <table class="table table-bordered table-hover">
         <thead>
           <tr>
+            <th>Member Number</th>
             <th>Name</th>
             <th>Phone</th>
             <th>Email</th>
@@ -26,6 +27,7 @@
         </thead>
         <tbody>
           <tr v-for="member in filteredMembers" :key="member.id">
+            <td>{{ member.memberNumber || '—' }}</td>
             <td>{{ member.fullName }}</td>
             <td>{{ member.phone || '—' }}</td>
             <td>{{ member.email || '—' }}</td>

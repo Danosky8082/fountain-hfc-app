@@ -16,19 +16,14 @@ const transporter = nodemailer.createTransport({
 
 /**
  * Send an email with a PDF attachment
- * @param {string} to - recipient email
- * @param {string} subject - email subject
- * @param {string} html - email body (HTML)
- * @param {Buffer} pdfBuffer - PDF file buffer
- * @param {string} filename - PDF filename
+ * @param {object} options
+ * @param {string} options.to - recipient email
+ * @param {string} options.subject - email subject
+ * @param {string} options.html - email body (HTML)
+ * @param {Buffer} options.pdfBuffer - PDF file buffer
+ * @param {string} options.filename - PDF filename
  */
-exports.sendReportEmail = async ({
-  to,
-  subject,
-  html,
-  pdfBuffer,
-  filename,
-}) => {
+exports.sendReportEmail = async ({ to, subject, html, pdfBuffer, filename }) => {
   try {
     const info = await transporter.sendMail({
       from: process.env.SMTP_FROM || `"Fountain HFC" <${process.env.SMTP_USER}>`,

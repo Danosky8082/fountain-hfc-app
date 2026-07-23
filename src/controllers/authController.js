@@ -43,7 +43,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // ✅ Allow ADMIN and HOD to login without a fellowship
     const fellowship = user.leading || user.assisting;
     if (!fellowship && user.role !== 'ADMIN' && user.role !== 'HOD') {
       return res.status(403).json({
@@ -107,10 +106,12 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// ─── Request OTP ────────────────────────────────────────────────
+// ─── Request OTP (with debug mode) ─────────────────────────────
 exports.requestOTP = async (req, res) => {
   try {
     const { churchId } = req.body;
+    console.log('📥 Request OTP for:', churchId);
+
     if (!churchId) {
       return res.status(400).json({ success: false, message: 'Church ID is required.' });
     }
@@ -121,36 +122,35 @@ exports.requestOTP = async (req, res) => {
     });
 
     if (!user) {
+      console.warn('❌ User not found:', churchId);
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
+    console.log(`👤 User found: ${user.fullName} (${user.role})`);
+
     // Only FL and ASSOCIATE can use OTP login
     if (user.role !== 'FL' && user.role !== 'ASSOCIATE') {
+      console.warn('❌ Role not allowed:', user.role);
       return res.status(403).json({
         success: false,
         message: 'Please use password login for this account.',
       });
     }
 
-    // ─── Temporary debug: return OTP directly ──────────────────
-// Remove this block after email is working
-console.log('🔑 DEBUG OTP for', user.churchId, ':', otp);
-return res.status(200).json({
-  success: true,
-  message: 'OTP generated (debug mode)',
-  data: { userId: user.id, otp: otp },
-});
-
-    // Check if user has an email
     if (!user.email) {
+      console.warn('❌ No email for user:', user.churchId);
       return res.status(400).json({
         success: false,
         message: 'No email registered for this user. Contact admin.',
       });
     }
 
-    // Generate and hash OTP
+    console.log('📧 Email found:', user.email);
+
+    // ─── Generate OTP ────────────────────────────────────────────
     const otp = generateOTP();
+    console.log('🔑 Generated OTP:', otp);
+
     const hashedOtp = await bcrypt.hash(otp, 10);
 
     // Delete any existing unused OTPs for this user
@@ -170,33 +170,52 @@ return res.status(200).json({
         expiresAt,
       },
     });
+    console.log('✅ OTP saved to database');
 
-    // Send email using existing email service
-    const { sendReportEmail } = require('../services/emailService');
-    const result = await sendReportEmail({
-      to: user.email,
-      subject: '🔐 Your OTP for Fountain HFC Login',
-      html: `
-        <h2>Your One-Time Password</h2>
-        <p>Hello ${user.fullName},</p>
-        <p>Your OTP for login is:</p>
-        <h1 style="font-size: 36px; letter-spacing: 4px;">${otp}</h1>
-        <p>This code is valid for <strong>5 minutes</strong>.</p>
-        <p>If you did not request this, please ignore this email.</p>
-        <hr />
-        <p><em>Fountain of Life HFC System</em></p>
-      `,
-      pdfBuffer: null,
-      filename: null,
+    // ─── DEBUG MODE: Return OTP directly (bypass email) ──────
+    // Remove this block once email is working.
+    console.log('🔑 Returning OTP directly (debug mode)');
+    return res.status(200).json({
+      success: true,
+      message: 'OTP generated (debug)',
+      data: { userId: user.id, otp: otp },
     });
 
-    if (!result.success) {
-      console.error('Failed to send OTP email:', result.error);
+    /* ─── (Comment out email sending for now) ───────────────────
+    try {
+      const { sendReportEmail } = require('../services/emailService');
+      const result = await sendReportEmail({
+        to: user.email,
+        subject: '🔐 Your OTP for Fountain HFC Login',
+        html: `
+          <h2>Your One-Time Password</h2>
+          <p>Hello ${user.fullName},</p>
+          <p>Your OTP for login is:</p>
+          <h1 style="font-size: 36px; letter-spacing: 4px;">${otp}</h1>
+          <p>This code is valid for <strong>5 minutes</strong>.</p>
+          <p>If you did not request this, please ignore this email.</p>
+          <hr />
+          <p><em>Fountain of Life HFC System</em></p>
+        `,
+        pdfBuffer: null,
+        filename: null,
+      });
+      if (!result.success) {
+        console.error('❌ Failed to send OTP email:', result.error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send OTP. Please try again later.',
+        });
+      }
+      console.log('✅ OTP email sent to:', user.email);
+    } catch (emailError) {
+      console.error('❌ Email service error:', emailError);
       return res.status(500).json({
         success: false,
-        message: 'Failed to send OTP. Please try again later.',
+        message: 'Email service unavailable.',
       });
     }
+    */
 
     res.status(200).json({
       success: true,
@@ -204,7 +223,8 @@ return res.status(200).json({
       data: { userId: user.id, role: user.role },
     });
   } catch (error) {
-    console.error('Request OTP error:', error);
+    console.error('❌ Request OTP error:', error);
+    console.error(error.stack);
     res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 };

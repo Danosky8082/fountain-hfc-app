@@ -132,6 +132,15 @@ exports.requestOTP = async (req, res) => {
       });
     }
 
+    // ─── Temporary debug: return OTP directly ──────────────────
+// Remove this block after email is working
+console.log('🔑 DEBUG OTP for', user.churchId, ':', otp);
+return res.status(200).json({
+  success: true,
+  message: 'OTP generated (debug mode)',
+  data: { userId: user.id, otp: otp },
+});
+
     // Check if user has an email
     if (!user.email) {
       return res.status(400).json({

@@ -21,4 +21,8 @@ router.post('/fellowship', adminController.createFellowship);
 router.post('/member', adminController.createMember);
 router.get('/members', adminController.getAllMembers);
 
+router.get('/fellowships', adminController.getAllFellowships);
+router.put('/fellowship/:id', adminController.updateFellowship);
+router.delete('/fellowship/:id', adminController.deleteFellowship);
+
 module.exports = router;

@@ -47,6 +47,47 @@
       </div>
     </div>
 
+    <!-- === Fellowship List (Manage) === -->
+    <div class="card mb-4">
+      <div class="card-header bg-info text-white">Manage Fellowships</div>
+      <div class="card-body">
+        <div v-if="loadingFellowships" class="text-center"><LoadingSpinner /></div>
+        <div v-else-if="fellowshipsList.length === 0" class="alert alert-info">No fellowships created yet.</div>
+        <div v-else>
+          <table class="table table-striped table-hover">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Leader</th>
+                <th>Members</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="f in fellowshipsList" :key="f.id">
+                <td>{{ f.name }}</td>
+                <td>{{ f.location }}</td>
+                <td>{{ f.leader?.fullName || '—' }}</td>
+                <td>{{ f._count.members }}</td>
+                <td>
+                  <button class="btn btn-sm btn-warning me-1" @click="openEditFellowship(f)">✏️</button>
+                  <button
+                    class="btn btn-sm btn-danger"
+                    @click="deleteFellowship(f.id)"
+                    :disabled="f._count.members > 0"
+                    :title="f._count.members > 0 ? 'Cannot delete: has members' : 'Delete fellowship'"
+                  >
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- === Add Member === -->
     <div class="card mb-4">
       <div class="card-header bg-success text-white">Add Member</div>
@@ -74,7 +115,7 @@
             </div>
             <div class="col-md-2 mb-2">
               <label class="form-label">Member Number (optional)</label>
-              <input v-model="memberForm.memberNumber" type="text" class="form-control" placeholder="e.g., FT0621NG" />
+              <input v-model="memberForm.memberNumber" type="text" class="form-control" placeholder="e.g., M001" />
             </div>
             <div class="col-md-12 mb-2">
               <button type="submit" class="btn btn-primary" :disabled="memberLoading">
@@ -120,7 +161,6 @@
                 <option value="ADMIN">Admin</option>
               </select>
             </div>
-            <!-- Button row (full width) -->
             <div class="col-12 mb-2">
               <button type="submit" class="btn btn-warning" :disabled="userLoading">
                 <span v-if="userLoading" class="spinner-border spinner-border-sm me-2"></span>
@@ -132,15 +172,57 @@
         <div v-if="userMessage" class="mt-2" :class="userMessageClass">{{ userMessage }}</div>
       </div>
     </div>
+
+    <!-- === Edit Fellowship Modal === -->
+    <div v-if="showEditFellowshipModal" class="modal-overlay" @click.self="closeEditFellowship">
+      <div class="modal-content">
+        <h5>Edit Fellowship</h5>
+        <form @submit.prevent="saveEditFellowship">
+          <div class="mb-2">
+            <label class="form-label">Name</label>
+            <input v-model="editFellowship.name" type="text" class="form-control" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Location</label>
+            <input v-model="editFellowship.location" type="text" class="form-control" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Leader</label>
+            <select v-model="editFellowship.leaderId" class="form-control">
+              <option value="">Select Leader</option>
+              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.fullName }}</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Associate</label>
+            <select v-model="editFellowship.associateId" class="form-control">
+              <option value="">Select Associate</option>
+              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.fullName }}</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success" :disabled="savingEditFellowship">
+              <span v-if="savingEditFellowship" class="spinner-border spinner-border-sm me-2"></span>
+              Save
+            </button>
+            <button type="button" class="btn btn-secondary" @click="closeEditFellowship">Cancel</button>
+          </div>
+        </form>
+        <div v-if="editFellowshipMessage" class="mt-2" :class="editFellowshipMessageClass">{{ editFellowshipMessage }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import api from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner.vue';
 
 const fellowships = ref([]);
 const users = ref([]);
+const fellowshipsList = ref([]);
+const loadingFellowships = ref(false);
 
 // ---- Fellowship ----
 const fellowshipForm = ref({ name: '', location: '', leaderId: '', associateId: '' });
@@ -160,7 +242,14 @@ const userLoading = ref(false);
 const userMessage = ref('');
 const userMessageClass = ref('text-success');
 
-// Fetch fellowships for dropdown
+// ---- Edit Fellowship ----
+const showEditFellowshipModal = ref(false);
+const editFellowship = ref({ id: '', name: '', location: '', leaderId: '', associateId: '' });
+const savingEditFellowship = ref(false);
+const editFellowshipMessage = ref('');
+const editFellowshipMessageClass = ref('text-success');
+
+// ─── Fetch fellowships (for dropdown) ──────────────────────────
 const fetchFellowships = async () => {
   try {
     const res = await api.get('/fellowship/list');
@@ -170,7 +259,7 @@ const fetchFellowships = async () => {
   }
 };
 
-// Fetch users (FL/ASSOCIATE) for leader/associate dropdowns
+// ─── Fetch users (FL/ASSOCIATE) ────────────────────────────────
 const fetchUsers = async () => {
   try {
     const res = await api.get('/admin/users');
@@ -180,7 +269,20 @@ const fetchUsers = async () => {
   }
 };
 
-// ---- Create Fellowship ----
+// ─── Fetch fellowship list for management ──────────────────────
+const fetchFellowshipsList = async () => {
+  loadingFellowships.value = true;
+  try {
+    const res = await api.get('/admin/fellowships');
+    if (res.data.success) fellowshipsList.value = res.data.data;
+  } catch (error) {
+    console.error('Failed to fetch fellowships list', error);
+  } finally {
+    loadingFellowships.value = false;
+  }
+};
+
+// ─── Create Fellowship ──────────────────────────────────────────
 const createFellowship = async () => {
   fellowshipLoading.value = true;
   fellowshipMessage.value = '';
@@ -191,6 +293,7 @@ const createFellowship = async () => {
       fellowshipMessageClass.value = 'text-success';
       fellowshipForm.value = { name: '', location: '', leaderId: '', associateId: '' };
       await fetchFellowships();
+      await fetchFellowshipsList(); // refresh management list
     } else {
       fellowshipMessage.value = '❌ ' + res.data.message;
       fellowshipMessageClass.value = 'text-danger';
@@ -203,7 +306,7 @@ const createFellowship = async () => {
   }
 };
 
-// ---- Create Member ----
+// ─── Create Member ──────────────────────────────────────────────
 const createMember = async () => {
   memberLoading.value = true;
   memberMessage.value = '';
@@ -225,7 +328,7 @@ const createMember = async () => {
   }
 };
 
-// ---- Create System User ----
+// ─── Create System User ─────────────────────────────────────────
 const createUser = async () => {
   userLoading.value = true;
   userMessage.value = '';
@@ -248,8 +351,94 @@ const createUser = async () => {
   }
 };
 
+// ─── Edit Fellowship ────────────────────────────────────────────
+const openEditFellowship = (fellowship) => {
+  editFellowship.value = {
+    id: fellowship.id,
+    name: fellowship.name,
+    location: fellowship.location,
+    leaderId: fellowship.leaderId || '',
+    associateId: fellowship.associateId || '',
+  };
+  showEditFellowshipModal.value = true;
+  editFellowshipMessage.value = '';
+};
+
+const closeEditFellowship = () => {
+  showEditFellowshipModal.value = false;
+  editFellowship.value = { id: '', name: '', location: '', leaderId: '', associateId: '' };
+  savingEditFellowship.value = false;
+};
+
+const saveEditFellowship = async () => {
+  savingEditFellowship.value = true;
+  editFellowshipMessage.value = '';
+  try {
+    const res = await api.put(`/admin/fellowship/${editFellowship.value.id}`, editFellowship.value);
+    if (res.data.success) {
+      editFellowshipMessage.value = '✅ Fellowship updated!';
+      editFellowshipMessageClass.value = 'text-success';
+      await fetchFellowshipsList();
+      setTimeout(() => closeEditFellowship(), 1500);
+    } else {
+      editFellowshipMessage.value = '❌ ' + res.data.message;
+      editFellowshipMessageClass.value = 'text-danger';
+    }
+  } catch (error) {
+    editFellowshipMessage.value = '❌ Error: ' + (error.response?.data?.message || error.message);
+    editFellowshipMessageClass.value = 'text-danger';
+  } finally {
+    savingEditFellowship.value = false;
+  }
+};
+
+// ─── Delete Fellowship ──────────────────────────────────────────
+const deleteFellowship = async (id) => {
+  if (!confirm('Delete this fellowship? All members must be removed first.')) return;
+  try {
+    const res = await api.delete(`/admin/fellowship/${id}`);
+    if (res.data.success) {
+      alert('✅ Fellowship deleted!');
+      await fetchFellowshipsList();
+    } else {
+      alert('❌ ' + res.data.message);
+    }
+  } catch (error) {
+    alert('❌ Error: ' + (error.response?.data?.message || error.message));
+  }
+};
+
 onMounted(() => {
   fetchFellowships();
   fetchUsers();
+  fetchFellowshipsList();
 });
 </script>
+
+<style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+button {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+</style>

@@ -192,3 +192,72 @@ exports.deleteMember = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+// ─── Get all fellowships (for admin list) ──────────────────────
+exports.getAllFellowships = async (req, res) => {
+  try {
+    const fellowships = await prisma.fellowship.findMany({
+      include: {
+        leader: true,
+        associate: true,
+        _count: { select: { members: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+    res.status(200).json({ success: true, data: fellowships });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Update Fellowship ──────────────────────────────────────────
+exports.updateFellowship = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, location, leaderId, associateId } = req.body;
+
+    if (!name || !location) {
+      return res.status(400).json({ success: false, message: 'Name and location are required.' });
+    }
+
+    const updated = await prisma.fellowship.update({
+      where: { id },
+      data: { name, location, leaderId, associateId },
+      include: { leader: true, associate: true },
+    });
+
+    res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Update fellowship error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Delete Fellowship (only if no members) ──────────────────────
+exports.deleteFellowship = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const fellowship = await prisma.fellowship.findUnique({
+      where: { id },
+      include: { _count: { select: { members: true } } },
+    });
+
+    if (!fellowship) {
+      return res.status(404).json({ success: false, message: 'Fellowship not found.' });
+    }
+
+    if (fellowship._count.members > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete fellowship with ${fellowship._count.members} member(s). Remove all members first.`,
+      });
+    }
+
+    await prisma.fellowship.delete({ where: { id } });
+
+    res.status(200).json({ success: true, message: 'Fellowship deleted successfully.' });
+  } catch (error) {
+    console.error('Delete fellowship error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

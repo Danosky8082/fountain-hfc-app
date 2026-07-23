@@ -6,7 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import './assets/main.css';
 
-// ─── Pinia instance ─────────────────────────────────────────────
+// ─── Create Pinia ──────────────────────────────────────────────
 const pinia = createPinia();
 
 const app = createApp(App);
@@ -14,7 +14,7 @@ const app = createApp(App);
 app.use(pinia);
 app.use(router);
 
-// 👇 Expose pinia for debugging (remove later)
+// ✅ Expose pinia to the window object for debugging
 window.__pinia = pinia;
 
 app.mount('#app');

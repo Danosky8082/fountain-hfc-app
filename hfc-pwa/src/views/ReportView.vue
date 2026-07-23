@@ -1,85 +1,135 @@
 <template>
   <div class="container mt-4">
-    <h4>📄 Monthly Report</h4>
-    <div v-if="loading" class="text-center"><LoadingSpinner /></div>
-    <div v-else-if="report">
-      <div class="card">
-        <div class="card-body">
-          <h5>{{ report.fellowship.name }} – {{ report.monthYear }}</h5>
-          <p><strong>Status:</strong> {{ report.status }}</p>
-          <hr />
-          <h6>Weekly Attendance</h6>
-          <table class="table table-bordered">
-            <thead>
-              <tr>
-                <th>Week</th>
-                <th>Date</th>
-                <th>Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="i in 5" :key="i">
-                <td>Week {{ i }}</td>
-                <td>{{ report[`week${i}Date`] ? formatDate(report[`week${i}Date`]) : '—' }}</td>
-                <td>{{ report[`week${i}Count`] || 0 }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <hr />
-          <h6>Pastoral & Follow-up</h6>
-          <div class="mb-2">
-            <label class="form-label">Prayed for every member at least once a week?</label>
-            <div class="form-check">
-              <input v-model="form.prayerFlag" class="form-check-input" type="checkbox" id="prayerFlag" />
-              <label class="form-check-label" for="prayerFlag">Yes</label>
-            </div>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">First Timers / New Converts</label>
-            <input v-model.number="form.firstTimers" type="number" class="form-control" min="0" />
-          </div>
-          <div class="mb-2">
-            <label class="form-label">New Members (total)</label>
-            <input v-model.number="form.newMembers" type="number" class="form-control" min="0" />
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Follow-ups</label>
-            <input v-model.number="form.followUps" type="number" class="form-control" min="0" />
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Issues for Escalation</label>
-            <textarea v-model="form.escalations" class="form-control" rows="2"></textarea>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Comments / Feedback</label>
-            <textarea v-model="form.comments" class="form-control" rows="2"></textarea>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-primary" @click="saveReport(false)">💾 Save Draft</button>
-            <button class="btn btn-success" @click="saveReport(true)">✅ Finalize Report</button>
-            <button class="btn btn-info" @click="downloadPDF">📄 Download PDF</button>
-            <button
-  v-if="report?.status === 'FINALIZED' && (authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD' || report.fellowship.leaderId === authStore.user?.id)"
-  class="btn btn-warning"
-  @click="resetReport"
->
-  🔄 Reset to Draft
-</button>
+    <div class="d-flex justify-content-between align-items-center">
+      <h4>📄 Monthly Report</h4>
+      <!-- Reset button – only visible when report is FINALIZED and user is ADMIN/HOD -->
+      <button
+        v-if="report && report.status === 'FINALIZED' && (authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD')"
+        class="btn btn-warning"
+        @click="resetToDraft"
+        :disabled="resetting"
+      >
+        <span v-if="resetting" class="spinner-border spinner-border-sm me-2"></span>
+        🔄 Reset to Draft
+      </button>
+    </div>
+
+    <div v-if="loading" class="text-center my-5"><LoadingSpinner /></div>
+
+    <div v-else-if="report" class="card">
+      <div class="card-body">
+        <!-- Fellowship info -->
+        <h5>{{ report.fellowship?.name || 'Unknown Fellowship' }} – {{ report.monthYear }}</h5>
+        <p>
+          <strong>Status:</strong>
+          <span :class="'badge ' + (report.status === 'FINALIZED' ? 'bg-success' : 'bg-warning')">
+            {{ report.status }}
+          </span>
+        </p>
+        <hr />
+
+        <!-- Weekly Attendance Table -->
+        <h6>Weekly Attendance</h6>
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Week</th>
+              <th>Date</th>
+              <th>Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="i in 5" :key="i">
+              <td>Week {{ i }}</td>
+              <td>{{ report[`week${i}Date`] ? formatDate(report[`week${i}Date`]) : '—' }}</td>
+              <td>{{ report[`week${i}Count`] || 0 }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <hr />
+
+        <!-- Pastoral & Follow-up -->
+        <h6>🙏 Pastoral & Follow-up</h6>
+
+        <div class="mb-2">
+          <label class="form-label">I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK?</label>
+          <div class="form-check">
+            <input v-model="form.prayerFlag" class="form-check-input" type="checkbox" id="prayerFlag" />
+            <label class="form-check-label" for="prayerFlag">Yes</label>
           </div>
         </div>
+
+        <div class="mb-2">
+          <label class="form-label">First Timers / New Converts</label>
+          <input v-model.number="form.firstTimers" type="number" class="form-control" min="0" />
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">New Members (total)</label>
+          <input v-model.number="form.newMembers" type="number" class="form-control" min="0" />
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">Follow-ups</label>
+          <input v-model.number="form.followUps" type="number" class="form-control" min="0" />
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">Issues for Escalation</label>
+          <textarea v-model="form.escalations" class="form-control" rows="2"></textarea>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">Comments / Feedback</label>
+          <textarea v-model="form.comments" class="form-control" rows="2"></textarea>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" @click="saveReport(false)" :disabled="saving || report.status === 'FINALIZED'">
+            <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
+            💾 Save Draft
+          </button>
+          <button class="btn btn-success" @click="saveReport(true)" :disabled="saving || report.status === 'FINALIZED'">
+            <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
+            ✅ Finalize Report
+          </button>
+          <button class="btn btn-info" @click="downloadPDF" :disabled="downloading">
+            <span v-if="downloading" class="spinner-border spinner-border-sm me-2"></span>
+            📄 Download PDF
+          </button>
+        </div>
+
+        <!-- Messages -->
+        <div v-if="message" class="mt-3" :class="messageClass">{{ message }}</div>
       </div>
     </div>
-    <div v-else class="alert alert-warning">No report found. Please ensure you have submitted at least one week.</div>
+
+    <div v-else class="alert alert-warning">
+      No report found. Please ensure you have submitted at least one week.
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import api from '../services/api'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
+import { ref, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
+import api from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner.vue';
 
-const loading = ref(true)
-const report = ref(null)
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+
+const loading = ref(true);
+const saving = ref(false);
+const downloading = ref(false);
+const resetting = ref(false);
+const report = ref(null);
+const message = ref('');
+const messageClass = ref('text-success');
+
 const form = ref({
   prayerFlag: false,
   firstTimers: 0,
@@ -87,73 +137,126 @@ const form = ref({
   followUps: 0,
   escalations: '',
   comments: '',
-})
+});
 
 const formatDate = (dateStr) => {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return '—';
+  }
+};
 
 const fetchReport = async () => {
+  const reportId = route.params.id;
+  const url = reportId ? `/reports/${reportId}` : '/reports/current';
+
+  loading.value = true;
   try {
-    const res = await api.get('/reports/current')
+    const res = await api.get(url);
     if (res.data.success) {
-      report.value = res.data.data
-      form.value.prayerFlag = report.value.prayerFlag || false
-      form.value.firstTimers = report.value.firstTimers || 0
-      form.value.newMembers = report.value.newMembers || 0
-      form.value.followUps = report.value.followUps || 0
-      form.value.escalations = report.value.escalations || ''
-      form.value.comments = report.value.comments || ''
+      report.value = res.data.data;
+      form.value.prayerFlag = report.value.prayerFlag || false;
+      form.value.firstTimers = report.value.firstTimers || 0;
+      form.value.newMembers = report.value.newMembers || 0;
+      form.value.followUps = report.value.followUps || 0;
+      form.value.escalations = report.value.escalations || '';
+      form.value.comments = report.value.comments || '';
     }
   } catch (error) {
-    console.error(error)
+    console.error('Failed to fetch report', error);
+    message.value = '❌ Error loading report';
+    messageClass.value = 'text-danger';
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const saveReport = async (finalize) => {
-  if (!report.value) return
+  if (!report.value) return;
+  if (report.value.status === 'FINALIZED') {
+    message.value = '⚠️ This report is already finalized and cannot be edited.';
+    messageClass.value = 'text-warning';
+    return;
+  }
+
+  saving.value = true;
+  message.value = '';
   try {
     const payload = {
       ...form.value,
       action: finalize ? 'FINALIZE' : 'SAVE',
-    }
-    const res = await api.put(`/reports/${report.value.id}`, payload)
+    };
+    const res = await api.put(`/reports/${report.value.id}`, payload);
     if (res.data.success) {
-      alert(finalize ? '✅ Report finalized!' : '💾 Draft saved!')
-      await fetchReport()
-    } else {
-      alert('❌ Failed: ' + res.data.message)
-    }
-  } catch (error) {
-    alert('Error saving report')
-  }
-}
-
-const downloadPDF = () => {
-  if (!report.value) return
-  const url = `/api/reports/${report.value.id}/pdf`
-  window.open(url, '_blank')
-}
-
-onMounted(fetchReport)
-
-const resetReport = async () => {
-  if (!report.value) return;
-  if (!confirm('Are you sure you want to reset this finalized report to draft?')) return;
-  try {
-    const res = await api.post(`/reports/${report.value.id}/reset`);
-    if (res.data.success) {
-      alert('✅ Report reset to draft!');
+      message.value = finalize ? '✅ Report finalized successfully!' : '💾 Draft saved!';
+      messageClass.value = 'text-success';
       await fetchReport();
     } else {
-      alert('❌ ' + res.data.message);
+      message.value = '❌ ' + res.data.message;
+      messageClass.value = 'text-danger';
     }
   } catch (error) {
-    alert('Error resetting report');
+    console.error('Error saving report', error);
+    message.value = '❌ Error: ' + (error.response?.data?.message || error.message);
+    messageClass.value = 'text-danger';
+  } finally {
+    saving.value = false;
   }
 };
+
+const downloadPDF = async () => {
+  if (!report.value) return;
+  downloading.value = true;
+  try {
+    const url = `/api/reports/${report.value.id}/pdf`;
+    window.open(url, '_blank');
+  } catch (error) {
+    console.error('PDF download error', error);
+    message.value = '❌ Failed to download PDF';
+    messageClass.value = 'text-danger';
+  } finally {
+    downloading.value = false;
+  }
+};
+
+const resetToDraft = async () => {
+  if (!report.value) return;
+  if (!confirm('Are you sure you want to reset this report from FINALIZED to DRAFT?')) return;
+
+  resetting.value = true;
+  message.value = '';
+  try {
+    const res = await api.put(`/reports/${report.value.id}`, {
+      action: 'RESET_TO_DRAFT',
+    });
+    if (res.data.success) {
+      message.value = '✅ Report reset to DRAFT successfully!';
+      messageClass.value = 'text-success';
+      await fetchReport();
+    } else {
+      message.value = '❌ ' + res.data.message;
+      messageClass.value = 'text-danger';
+    }
+  } catch (error) {
+    console.error('Reset error', error);
+    message.value = '❌ Error resetting report';
+    messageClass.value = 'text-danger';
+  } finally {
+    resetting.value = false;
+  }
+};
+
+onMounted(async () => {
+  if (!authStore.isAuthenticated) {
+    const restored = await authStore.restoreSession();
+    if (!restored) {
+      router.push('/login');
+      return;
+    }
+  }
+  await fetchReport();
+});
 </script>

@@ -358,6 +358,48 @@ exports.updateReport = async (req, res) => {
         },
       },
     });
+    // ─── Handle RESET_TO_DRAFT action ─────────────────────────────
+if (action === 'RESET_TO_DRAFT') {
+  // Only allow if user is ADMIN or HOD
+  if (user.role !== 'ADMIN' && user.role !== 'HOD') {
+    return res.status(403).json({
+      success: false,
+      message: 'Only Admins or HODs can reset a report to draft.',
+    });
+  }
+
+  // Only allow if report is currently FINALIZED
+  if (existing.status !== 'FINALIZED') {
+    return res.status(400).json({
+      success: false,
+      message: 'Only finalized reports can be reset to draft.',
+    });
+  }
+
+  // Reset to DRAFT
+  const updated = await prisma.monthlyReport.update({
+    where: { id },
+    data: {
+      status: 'DRAFT',
+      finalizedAt: null,
+      finalizedBy: null,
+    },
+    include: {
+      fellowship: {
+        include: {
+          leader: true,
+          associate: true,
+        },
+      },
+    },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: 'Report reset to draft successfully.',
+    data: updated,
+  });
+}
 
     // 5. If finalizing, send emails (with try-catch to avoid blocking the response)
     if (action === 'FINALIZE') {

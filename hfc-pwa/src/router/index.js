@@ -91,6 +91,13 @@ router.beforeEach(async (to, from) => {
     return '/dashboard';
   }
 
+  {
+  path: '/report/:id',
+  name: 'ReportDetail',
+  component: () => import('../views/ReportView.vue'),
+  meta: { requiresAuth: true },
+}
+
   return true;
 });
 

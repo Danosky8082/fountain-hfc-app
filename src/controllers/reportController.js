@@ -569,9 +569,7 @@ exports.generatePDF = async (req, res) => {
     doc.pipe(res);
 
     // (PDF building code – same as generatePDFBuffer, but piped to response)
-    // For brevity, we reuse the same content as in generatePDFBuffer.
-    // (Copy the PDF building code from generatePDFBuffer into here)
-    // ─── I'll include it for completeness ──────────────────────
+    // ─── Reuse the same PDF building logic ──────────────────────
     const formatDate = (date) => {
       if (!date) return '—';
       try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
@@ -785,9 +783,3 @@ exports.exportCSV = async (req, res) => {
     });
   }
 };
-
-exports.getCurrentReport = getCurrentReport;
-exports.getAllReports = getAllReports;
-exports.exportCSV = exportCSV;
-exports.generatePDF = generatePDF;
-exports.updateReport = updateReport;

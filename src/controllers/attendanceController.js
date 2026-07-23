@@ -1,5 +1,27 @@
-// src/controllers/attendanceController.js
 const prisma = require('../prisma');
+
+// ─── Helper: Get current week number (1‑5) ─────────────────────
+const getCurrentWeek = (date) => {
+  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfMonth.getDay()) % 7;
+  let week = Math.ceil((date.getDate() - firstSunday + 1) / 7);
+  return Math.min(Math.max(week, 1), 5);
+};
+
+// ─── Helper: Create a submitted session for a given week ──────
+const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
+  return prisma.attendanceSession.create({
+    data: {
+      fellowshipId,
+      weekNumber,
+      monthYear,
+      meetingDate: meetingDate || new Date(),
+      isSubmitted: true,
+      submittedAt: new Date(),
+      submittedBy: null, // system
+    },
+  });
+};
 
 /**
  * GET /api/attendance/current-session
@@ -10,7 +32,7 @@ exports.getOrCreateCurrentSession = async (req, res) => {
   try {
     const { fellowshipId, userId } = req.user;
     const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7); // "2026-07"
+    const monthYear = now.toISOString().slice(0, 7);
 
     // Calculate week number (1-5) based on which Sunday of the month it is
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -214,39 +236,19 @@ exports.markAttendance = async (req, res) => {
 /**
  * POST /api/attendance/submit-week
  * Submits the current week's attendance (validates no skipped weeks)
+ * Optionally force‑submits, auto‑creating missing weeks with zero attendance.
+ * Body: { force: true } (optional)
  */
 exports.submitWeek = async (req, res) => {
   try {
     const { fellowshipId, userId } = req.user;
+    const force = req.body.force === true; // optional flag
     const now = new Date();
     const monthYear = now.toISOString().slice(0, 7);
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfMonth.getDay()) % 7;
-    const currentWeek = Math.min(Math.max(Math.ceil((now.getDate() - firstSunday + 1) / 7), 1), 5);
+    const currentWeek = getCurrentWeek(now);
 
-    // 🔥 VALIDATION: Check if ALL previous weeks (1 to currentWeek-1) are submitted
-    for (let week = 1; week < currentWeek; week++) {
-      const prevSession = await prisma.attendanceSession.findUnique({
-        where: {
-          fellowshipId_weekNumber_monthYear: {
-            fellowshipId,
-            weekNumber: week,
-            monthYear,
-          },
-        },
-      });
-
-      // If a previous week doesn't exist OR exists but not submitted → block
-      if (!prevSession || !prevSession.isSubmitted) {
-        return res.status(400).json({
-          success: false,
-          message: `⚠️ You must submit Week ${week} before submitting Week ${currentWeek}. Please complete it first.`,
-        });
-      }
-    }
-
-    // Get current session
-    const session = await prisma.attendanceSession.findUnique({
+    // 1. Get or create the current session
+    let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId,
@@ -258,28 +260,63 @@ exports.submitWeek = async (req, res) => {
     });
 
     if (!session) {
-      return res.status(404).json({
-        success: false,
-        message: 'No attendance session found for this week. Please scan at least one member.',
+      session = await prisma.attendanceSession.create({
+        data: {
+          fellowshipId,
+          weekNumber: currentWeek,
+          monthYear,
+          meetingDate: now,
+        },
+        include: { records: true },
       });
     }
 
     if (session.isSubmitted) {
       return res.status(400).json({
         success: false,
-        message: 'This week has already been submitted.',
+        message: `Week ${currentWeek} has already been submitted.`,
       });
     }
 
-    // Require at least 1 person checked in (optional, but good practice)
-    if (session.records.length === 0) {
+    // 2. Check for missing previous weeks (1 .. currentWeek-1)
+    const missingWeeks = [];
+    for (let week = 1; week < currentWeek; week++) {
+      const existing = await prisma.attendanceSession.findUnique({
+        where: {
+          fellowshipId_weekNumber_monthYear: {
+            fellowshipId,
+            weekNumber: week,
+            monthYear,
+          },
+        },
+      });
+      if (!existing || !existing.isSubmitted) {
+        missingWeeks.push(week);
+      }
+    }
+
+    // 3. If there are missing weeks and `force` is not set, return the list
+    if (missingWeeks.length > 0 && !force) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot submit an empty week. Please mark attendance first.',
+        message: `You are missing submissions for Week(s) ${missingWeeks.join(', ')}. Please review them or force submit.`,
+        missingWeeks,
+        canForce: true,
       });
     }
 
-    // Submit the week
+    // 4. If `force` is true, auto‑create missing weeks with zero attendance
+    if (force && missingWeeks.length > 0) {
+      for (const week of missingWeeks) {
+        // Approximate meeting date (7 days before current week)
+        const meetingDate = new Date(now);
+        meetingDate.setDate(now.getDate() - (currentWeek - week) * 7);
+        await createSubmittedSession(fellowshipId, week, monthYear, meetingDate);
+        console.log(`✅ Auto-created Week ${week} (zero attendance)`);
+      }
+    }
+
+    // 5. Submit the current week
     const submitted = await prisma.attendanceSession.update({
       where: { id: session.id },
       data: {
@@ -291,11 +328,13 @@ exports.submitWeek = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `✅ Week ${currentWeek} submitted successfully!`,
+      message: `✅ Week ${currentWeek} submitted successfully!` +
+        (missingWeeks.length > 0 ? ` Missing weeks ${missingWeeks.join(', ')} were auto‑created with zero attendance.` : ''),
       data: {
         weekNumber: currentWeek,
         totalPresent: session.records.length,
         submittedAt: submitted.submittedAt,
+        autoCreatedWeeks: missingWeeks,
       },
     });
   } catch (error) {

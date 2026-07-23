@@ -208,9 +208,16 @@ const saveReport = async (finalize) => {
     };
     const res = await api.put(`/reports/${report.value.id}`, payload);
     if (res.data.success) {
-      message.value = finalize ? '✅ Report finalized successfully!' : '💾 Draft saved!';
+      const successMsg = finalize
+        ? '✅ Report finalized successfully! Emails have been sent to HODs.'
+        : '💾 Draft saved!';
+      message.value = successMsg;
       messageClass.value = 'text-success';
-      await fetchReport();
+      // Show a pop-up alert for finalize
+      if (finalize) {
+        alert(successMsg);
+      }
+      await fetchReport(); // refresh
     } else {
       message.value = '❌ ' + res.data.message;
       messageClass.value = 'text-danger';

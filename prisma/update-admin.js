@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 async function main() {
   // Update the user with churchId 'FT0671NG' to ADMIN role
   const user = await prisma.user.update({
-    where: { churchId: 'FT0671NG' },
+    where: { churchId: 'FT0772NG' },
     data: { role: 'ADMIN' },
   });
   console.log(`✅ User ${user.fullName} (${user.churchId}) is now ADMIN`);

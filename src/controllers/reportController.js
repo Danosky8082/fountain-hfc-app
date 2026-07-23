@@ -22,7 +22,7 @@ const generatePDFBuffer = async (reportId) => {
   doc.on('data', (chunk) => chunks.push(chunk));
   doc.on('end', () => {});
 
-  // ─── Build PDF content (with safe fallbacks) ──────────────
+  // ─── Build PDF content ──────────────────────────────────────
   const formatDate = (date) => {
     if (!date) return '—';
     try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
@@ -34,7 +34,7 @@ const generatePDFBuffer = async (reportId) => {
   const associateName = report.fellowship?.associate?.fullName || '—';
   const associateEmail = report.fellowship?.associate?.email || '—';
 
-  // ─── Header ────────────────────────────────────────────────
+  // Header
   doc
     .fontSize(18)
     .font('Helvetica-Bold')
@@ -59,7 +59,7 @@ const generatePDFBuffer = async (reportId) => {
     .stroke()
     .moveDown(1);
 
-  // ─── Fellowship Information ───────────────────────────────
+  // Fellowship Information
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
   const [year, month] = report.monthYear.split('-');
@@ -89,7 +89,7 @@ const generatePDFBuffer = async (reportId) => {
 
   doc.moveDown(0.5);
 
-  // ─── Weekly Attendance Table ──────────────────────────────
+  // Weekly Attendance Table
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
@@ -138,7 +138,7 @@ const generatePDFBuffer = async (reportId) => {
   doc.moveDown(0.5);
   doc.y = tableY + 10;
 
-  // ─── Pastoral Care & Follow-up ────────────────────────────
+  // Pastoral Care & Follow-up
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
@@ -289,7 +289,7 @@ exports.updateReport = async (req, res) => {
 
     console.log('📝 updateReport:', { id, action });
 
-    // 1. Verify the report exists
+    // 1. Fetch existing report
     const existing = await prisma.monthlyReport.findUnique({
       where: { id },
       include: { fellowship: true },
@@ -299,7 +299,7 @@ exports.updateReport = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Report not found.' });
     }
 
-    // 2. ✅ Fixed authorization – use include, not select on leadingId/assistingId
+    // 2. Get user with relations
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { leading: true, assisting: true },
@@ -315,6 +315,50 @@ exports.updateReport = async (req, res) => {
       user.role === 'HOD' ||
       user.role === 'ADMIN';
 
+    // ─── Handle RESET_TO_DRAFT ──────────────────────────────────
+    if (action === 'RESET_TO_DRAFT') {
+      // Allow if ADMIN, HOD, or the owner (FL/Associate)
+      const isAdminOrHod = user.role === 'ADMIN' || user.role === 'HOD';
+      const isOwner = userFellowshipId === existing.fellowshipId;
+      if (!isAdminOrHod && !isOwner) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not authorized to reset this report.',
+        });
+      }
+
+      if (existing.status !== 'FINALIZED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only finalized reports can be reset to draft.',
+        });
+      }
+
+      const updated = await prisma.monthlyReport.update({
+        where: { id },
+        data: {
+          status: 'DRAFT',
+          finalizedAt: null,
+          finalizedBy: null,
+        },
+        include: {
+          fellowship: {
+            include: {
+              leader: true,
+              associate: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Report reset to draft successfully.',
+        data: updated,
+      });
+    }
+
+    // ─── For SAVE / FINALIZE ─────────────────────────────────────
     if (!isAuthorized) {
       return res.status(403).json({
         success: false,
@@ -358,57 +402,14 @@ exports.updateReport = async (req, res) => {
         },
       },
     });
-    // ─── Handle RESET_TO_DRAFT action ─────────────────────────────
-if (action === 'RESET_TO_DRAFT') {
-  // Only allow if user is ADMIN or HOD
-  if (user.role !== 'ADMIN' && user.role !== 'HOD') {
-    return res.status(403).json({
-      success: false,
-      message: 'Only Admins or HODs can reset a report to draft.',
-    });
-  }
 
-  // Only allow if report is currently FINALIZED
-  if (existing.status !== 'FINALIZED') {
-    return res.status(400).json({
-      success: false,
-      message: 'Only finalized reports can be reset to draft.',
-    });
-  }
-
-  // Reset to DRAFT
-  const updated = await prisma.monthlyReport.update({
-    where: { id },
-    data: {
-      status: 'DRAFT',
-      finalizedAt: null,
-      finalizedBy: null,
-    },
-    include: {
-      fellowship: {
-        include: {
-          leader: true,
-          associate: true,
-        },
-      },
-    },
-  });
-
-  return res.status(200).json({
-    success: true,
-    message: 'Report reset to draft successfully.',
-    data: updated,
-  });
-}
-
-    // 5. If finalizing, send emails (with try-catch to avoid blocking the response)
+    // ─── Send emails if finalized ────────────────────────────────
     if (action === 'FINALIZE') {
       console.log('📧 Sending emails...');
       try {
         const pdfBuffer = await generatePDFBuffer(id);
         const { sendReportEmail } = require('../services/emailService');
 
-        // Get all HODs
         const hods = await prisma.user.findMany({
           where: { role: 'HOD' },
           select: { email: true, fullName: true },
@@ -434,7 +435,6 @@ if (action === 'RESET_TO_DRAFT') {
           }
         }
 
-        // Send confirmation to the submitter
         const submitter = await prisma.user.findUnique({
           where: { id: userId },
           select: { email: true, fullName: true },
@@ -459,7 +459,6 @@ if (action === 'RESET_TO_DRAFT') {
         }
       } catch (emailError) {
         console.error('❌ Email/PDF error (but report is finalized):', emailError);
-        // Do NOT fail the request – the report is already saved
       }
     }
 
@@ -566,25 +565,23 @@ exports.generatePDF = async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    // Use the same PDF building logic as generatePDFBuffer but pipe to response
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
     doc.pipe(res);
 
-    // ─── Build PDF (same content as before) ────────────────────
-    // (Copy the same PDF building code from generatePDFBuffer)
-    // ─── I'll reuse the same fields as in generatePDFBuffer ──
+    // (PDF building code – same as generatePDFBuffer, but piped to response)
+    // For brevity, we reuse the same content as in generatePDFBuffer.
+    // (Copy the PDF building code from generatePDFBuffer into here)
+    // ─── I'll include it for completeness ──────────────────────
     const formatDate = (date) => {
       if (!date) return '—';
       try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
     };
-    const safeString = (val) => val?.toString() || '—';
     const fellowshipName = report.fellowship?.name || 'Unknown';
     const leaderName = report.fellowship?.leader?.fullName || '—';
     const leaderEmail = report.fellowship?.leader?.email || '—';
     const associateName = report.fellowship?.associate?.fullName || '—';
     const associateEmail = report.fellowship?.associate?.email || '—';
 
-    // ─── Header ────────────────────────────────────────────────
     doc
       .fontSize(18)
       .font('Helvetica-Bold')
@@ -609,7 +606,6 @@ exports.generatePDF = async (req, res) => {
       .stroke()
       .moveDown(1);
 
-    // ─── Fellowship Information ───────────────────────────────
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
     const [year, month] = report.monthYear.split('-');
@@ -639,7 +635,6 @@ exports.generatePDF = async (req, res) => {
 
     doc.moveDown(0.5);
 
-    // ─── Weekly Attendance Table ──────────────────────────────
     doc
       .fontSize(12)
       .font('Helvetica-Bold')
@@ -688,7 +683,6 @@ exports.generatePDF = async (req, res) => {
     doc.moveDown(0.5);
     doc.y = tableY + 10;
 
-    // ─── Pastoral Care & Follow-up ────────────────────────────
     doc
       .fontSize(12)
       .font('Helvetica-Bold')
@@ -788,72 +782,6 @@ exports.exportCSV = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to export CSV.',
-    });
-  }
-};
-// ─── Reset Report to Draft ──────────────────────────────────────
-exports.resetReport = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { userId, role } = req.user;
-
-    // 1. Fetch the report
-    const report = await prisma.monthlyReport.findUnique({
-      where: { id },
-      include: { fellowship: true },
-    });
-
-    if (!report) {
-      return res.status(404).json({ success: false, message: 'Report not found.' });
-    }
-
-    // 2. Only allow if status is FINALIZED
-    if (report.status !== 'FINALIZED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only finalized reports can be reset to draft.',
-      });
-    }
-
-    // 3. Check authorization (admin or the FL who owns the report)
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { leading: true, assisting: true },
-    });
-
-    const userFellowshipId = user?.leading?.id || user?.assisting?.id;
-    const isAuthorized =
-      userFellowshipId === report.fellowshipId ||
-      role === 'ADMIN' ||
-      role === 'HOD';
-
-    if (!isAuthorized) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to reset this report.',
-      });
-    }
-
-    // 4. Reset to DRAFT
-    const updated = await prisma.monthlyReport.update({
-      where: { id },
-      data: {
-        status: 'DRAFT',
-        finalizedAt: null,
-        finalizedBy: null,
-      },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Report reset to draft successfully.',
-      data: updated,
-    });
-  } catch (error) {
-    console.error('Reset Report Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reset report.',
     });
   }
 };

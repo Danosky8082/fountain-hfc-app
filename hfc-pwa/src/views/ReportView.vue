@@ -2,7 +2,7 @@
   <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center">
       <h4>📄 Monthly Report</h4>
-      <!-- Reset button – only when conditions are met -->
+      <!-- Reset button – visible to Admins, HODs, and the fellowship owner -->
       <button
         v-if="canReset"
         class="btn btn-warning"
@@ -142,9 +142,12 @@ const form = ref({
 
 // ─── Computed ──────────────────────────────────────────────────
 const canReset = computed(() => {
+  if (!report.value) return false;
+  if (report.value.status !== 'FINALIZED') return false;
   const role = authStore.user?.role;
-  return report.value?.status === 'FINALIZED' &&
-         (role === 'ADMIN' || role === 'HOD');
+  const isAdminOrHod = role === 'ADMIN' || role === 'HOD';
+  const isOwner = authStore.fellowship?.id === report.value.fellowshipId;
+  return isAdminOrHod || isOwner;
 });
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -277,7 +280,3 @@ onMounted(async () => {
   await fetchReport();
 });
 </script>
-
-<style scoped>
-/* Optional styling */
-</style>

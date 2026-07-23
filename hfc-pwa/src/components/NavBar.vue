@@ -15,7 +15,6 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav me-auto">
-          <!-- Common links -->
           <li class="nav-item">
             <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
           </li>
@@ -38,16 +37,19 @@
             <router-link class="nav-link" to="/report">Report</router-link>
           </li>
 
-          <!-- Correction – HOD or ADMIN -->
+          <!-- Users – Admin or HOD -->
+          <li class="nav-item" v-if="isAdminOrHod">
+            <router-link class="nav-link" to="/admin/users">👥 Users</router-link>
+          </li>
+
+          <!-- Correction – Admin or HOD -->
           <li class="nav-item" v-if="isAdminOrHod">
             <router-link class="nav-link" to="/admin/correction">📝 Correction</router-link>
           </li>
 
-          <!-- ⚠️ Temporary debug link – remove later -->
-          <li class="nav-item">
-            <router-link class="nav-link" to="/admin/correction" style="background: yellow; color: black;">
-              🐞 Debug Correction (always visible)
-            </router-link>
+          <!-- HOD Dashboard – Admin or HOD -->
+          <li class="nav-item" v-if="isAdminOrHod">
+            <router-link class="nav-link" to="/hod-dashboard">📊 HOD Dashboard</router-link>
           </li>
         </ul>
         <button class="btn btn-outline-light" @click="logout">Logout</button>
@@ -64,13 +66,9 @@ import { computed } from "vue";
 const authStore = useAuthStore();
 const router = useRouter();
 
-// ─── Computed ──────────────────────────────────────────────────
 const isAdmin = computed(() => authStore.user?.role === 'ADMIN');
 const isHod = computed(() => authStore.user?.role === 'HOD');
 const isAdminOrHod = computed(() => isAdmin.value || isHod.value);
-
-// ─── Debug (remove after confirming) ──────────────────────────
-console.log('🔍 NavBar – user role:', authStore.user?.role);
 
 const logout = () => {
   authStore.logout();

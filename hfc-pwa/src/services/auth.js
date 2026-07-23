@@ -6,7 +6,6 @@ export const login = async (churchId, password) => {
     if (response.data.success) {
       const { user, fellowship, token } = response.data.data;
       localStorage.setItem('jwt_token', token);
-      console.log('✅ Token saved to localStorage');
       return { success: true, user, fellowship, token };
     } else {
       return { success: false, message: response.data.message };

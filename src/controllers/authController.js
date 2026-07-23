@@ -99,7 +99,7 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// ─── Request OTP (FL/ASSOCIATE) ────────────────────────────────
+// ─── Request OTP ────────────────────────────────────────────────
 exports.requestOTP = async (req, res) => {
   try {
     const { churchId } = req.body;
@@ -161,7 +161,7 @@ exports.requestOTP = async (req, res) => {
     });
     console.log('✅ OTP saved to database');
 
-    // ─── DEBUG MODE: Return OTP directly (bypass email) ──────
+    // ─── DEBUG MODE: Return OTP directly ──────────────────────
     console.log('🔑 Returning OTP directly (debug mode)');
     return res.status(200).json({
       success: true,
@@ -169,7 +169,7 @@ exports.requestOTP = async (req, res) => {
       data: { userId: user.id, otp: otp },
     });
 
-    // ─── (Real email – uncomment when SMTP works) ────────────
+    // ─── (Email sending commented out – uncomment later) ────
     /*
     try {
       const { sendReportEmail } = require('../services/emailService');

@@ -181,7 +181,7 @@ exports.requestOTP = async (req, res) => {
       data: { userId: user.id, otp: otp },
     });
 
-    /* ─── (Comment out email sending for now) ───────────────────
+     // ─── Send OTP via email ──────────────────────────────────────
     try {
       const { sendReportEmail } = require('../services/emailService');
       const result = await sendReportEmail({
@@ -215,7 +215,6 @@ exports.requestOTP = async (req, res) => {
         message: 'Email service unavailable.',
       });
     }
-    */
 
     res.status(200).json({
       success: true,

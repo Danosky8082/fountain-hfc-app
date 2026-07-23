@@ -27,6 +27,7 @@ const generatePDFBuffer = async (reportId) => {
     if (!date) return '—';
     try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
   };
+  const safeString = (val) => val?.toString() || '—';
   const fellowshipName = report.fellowship?.name || 'Unknown';
   const leaderName = report.fellowship?.leader?.fullName || '—';
   const leaderEmail = report.fellowship?.leader?.email || '—';
@@ -405,17 +406,14 @@ exports.updateReport = async (req, res) => {
     if (action === 'FINALIZE') {
       console.log('📧 Starting email sending process...');
       try {
-        // 1. Generate PDF
         console.log('🔍 Generating PDF buffer...');
         const pdfBuffer = await generatePDFBuffer(id);
         console.log(`✅ PDF buffer size: ${pdfBuffer.length} bytes`);
 
-        // 2. Load email service
         console.log('🔍 Loading email service...');
         const { sendReportEmail } = require('../services/emailService');
         console.log('✅ Email service loaded');
 
-        // 3. Get HODs
         console.log('🔍 Fetching HODs...');
         const hods = await prisma.user.findMany({
           where: { role: 'HOD' },
@@ -423,7 +421,6 @@ exports.updateReport = async (req, res) => {
         });
         console.log(`✅ Found ${hods.length} HOD(s)`);
 
-        // 4. Send to each HOD
         if (hods.length > 0) {
           for (const hod of hods) {
             if (hod.email) {
@@ -454,7 +451,6 @@ exports.updateReport = async (req, res) => {
           console.warn('⚠️ No HODs found – skipping HOD emails.');
         }
 
-        // 5. Send confirmation to the submitter
         console.log('🔍 Fetching submitter...');
         const submitter = await prisma.user.findUnique({
           where: { id: userId },
@@ -599,7 +595,6 @@ exports.generatePDF = async (req, res) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
     doc.pipe(res);
 
-    // (PDF building code – same as generatePDFBuffer, but piped to response)
     // ─── Reuse the same PDF building logic ──────────────────────
     const formatDate = (date) => {
       if (!date) return '—';

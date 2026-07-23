@@ -2,7 +2,6 @@
   <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center">
       <h4>📄 Monthly Report</h4>
-      <!-- Reset button – visible to Admins, HODs, and the fellowship owner -->
       <button
         v-if="canReset"
         class="btn btn-warning"
@@ -18,7 +17,6 @@
 
     <div v-else-if="report" class="card">
       <div class="card-body">
-        <!-- Fellowship info -->
         <h5>{{ report.fellowship?.name || 'Unknown Fellowship' }} – {{ report.monthYear }}</h5>
         <p>
           <strong>Status:</strong>
@@ -28,7 +26,6 @@
         </p>
         <hr />
 
-        <!-- Weekly Attendance Table -->
         <h6>Weekly Attendance</h6>
         <table class="table table-bordered">
           <thead>
@@ -48,7 +45,6 @@
         </table>
         <hr />
 
-        <!-- Pastoral & Follow-up -->
         <h6>🙏 Pastoral & Follow-up</h6>
 
         <div class="mb-2">
@@ -84,7 +80,6 @@
           <textarea v-model="form.comments" class="form-control" rows="2"></textarea>
         </div>
 
-        <!-- Action Buttons -->
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-primary" @click="saveReport(false)" :disabled="saving || report.status === 'FINALIZED'">
             <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
@@ -100,7 +95,6 @@
           </button>
         </div>
 
-        <!-- Messages -->
         <div v-if="message" class="mt-3" :class="messageClass">{{ message }}</div>
       </div>
     </div>
@@ -122,7 +116,6 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-// ─── State ──────────────────────────────────────────────────────
 const loading = ref(true);
 const saving = ref(false);
 const downloading = ref(false);
@@ -140,7 +133,6 @@ const form = ref({
   comments: '',
 });
 
-// ─── Computed ──────────────────────────────────────────────────
 const canReset = computed(() => {
   if (!report.value) return false;
   if (report.value.status !== 'FINALIZED') return false;
@@ -150,7 +142,6 @@ const canReset = computed(() => {
   return isAdminOrHod || isOwner;
 });
 
-// ─── Helpers ──────────────────────────────────────────────────
 const formatDate = (dateStr) => {
   if (!dateStr) return '—';
   try {
@@ -161,7 +152,6 @@ const formatDate = (dateStr) => {
   }
 };
 
-// ─── Fetch Report ──────────────────────────────────────────────
 const fetchReport = async () => {
   const reportId = route.params.id;
   const url = reportId ? `/reports/${reportId}` : '/reports/current';
@@ -177,9 +167,6 @@ const fetchReport = async () => {
       form.value.followUps = report.value.followUps || 0;
       form.value.escalations = report.value.escalations || '';
       form.value.comments = report.value.comments || '';
-    } else {
-      message.value = '❌ ' + res.data.message;
-      messageClass.value = 'text-danger';
     }
   } catch (error) {
     console.error('Failed to fetch report', error);
@@ -190,7 +177,6 @@ const fetchReport = async () => {
   }
 };
 
-// ─── Save / Finalize ───────────────────────────────────────────
 const saveReport = async (finalize) => {
   if (!report.value) return;
   if (report.value.status === 'FINALIZED') {
@@ -213,9 +199,7 @@ const saveReport = async (finalize) => {
         : '💾 Draft saved!';
       message.value = successMsg;
       messageClass.value = 'text-success';
-      if (finalize) {
-        alert(successMsg);
-      }
+      if (finalize) alert(successMsg);
       await fetchReport();
     } else {
       message.value = '❌ ' + res.data.message;
@@ -230,7 +214,6 @@ const saveReport = async (finalize) => {
   }
 };
 
-// ─── Download PDF ──────────────────────────────────────────────
 const downloadPDF = async () => {
   if (!report.value) return;
   downloading.value = true;
@@ -246,7 +229,6 @@ const downloadPDF = async () => {
   }
 };
 
-// ─── Reset to Draft ────────────────────────────────────────────
 const resetToDraft = async () => {
   if (!report.value) return;
   if (!confirm('Are you sure you want to reset this report from FINALIZED to DRAFT?')) return;
@@ -274,7 +256,6 @@ const resetToDraft = async () => {
   }
 };
 
-// ─── Lifecycle ──────────────────────────────────────────────────
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     const restored = await authStore.restoreSession();

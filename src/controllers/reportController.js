@@ -22,18 +22,19 @@ const generatePDFBuffer = async (reportId) => {
   doc.on('data', (chunk) => chunks.push(chunk));
   doc.on('end', () => {});
 
-  // ─── Build PDF content ──────────────────────────────────────
+  // ─── Build PDF content (with safe fallbacks) ──────────────
   const formatDate = (date) => {
     if (!date) return '—';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
   };
+  const safeString = (val) => val?.toString() || '—';
+  const fellowshipName = report.fellowship?.name || 'Unknown';
+  const leaderName = report.fellowship?.leader?.fullName || '—';
+  const leaderEmail = report.fellowship?.leader?.email || '—';
+  const associateName = report.fellowship?.associate?.fullName || '—';
+  const associateEmail = report.fellowship?.associate?.email || '—';
 
-  // Header
+  // ─── Header ────────────────────────────────────────────────
   doc
     .fontSize(18)
     .font('Helvetica-Bold')
@@ -58,7 +59,7 @@ const generatePDFBuffer = async (reportId) => {
     .stroke()
     .moveDown(1);
 
-  // Fellowship Information
+  // ─── Fellowship Information ───────────────────────────────
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
   const [year, month] = report.monthYear.split('-');
@@ -80,15 +81,15 @@ const generatePDFBuffer = async (reportId) => {
 
   let yPos = doc.y;
   yPos = drawField('REPORT FOR THE MONTH OF', `${monthName} ${year}`, yPos);
-  yPos = drawField('NAME OF HOME FELLOWSHIP', report.fellowship.name, yPos);
-  yPos = drawField('NAME OF HOME FELLOWSHIP LEADER', report.fellowship.leader?.fullName || '—', yPos);
-  yPos = drawField('HFL Email', report.fellowship.leader?.email || '—', yPos);
-  yPos = drawField('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', report.fellowship.associate?.fullName || '—', yPos);
-  yPos = drawField('Associate HFL Email', report.fellowship.associate?.email || '—', yPos);
+  yPos = drawField('NAME OF HOME FELLOWSHIP', fellowshipName, yPos);
+  yPos = drawField('NAME OF HOME FELLOWSHIP LEADER', leaderName, yPos);
+  yPos = drawField('HFL Email', leaderEmail, yPos);
+  yPos = drawField('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', associateName, yPos);
+  yPos = drawField('Associate HFL Email', associateEmail, yPos);
 
   doc.moveDown(0.5);
 
-  // Weekly Attendance Table
+  // ─── Weekly Attendance Table ──────────────────────────────
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
@@ -137,7 +138,7 @@ const generatePDFBuffer = async (reportId) => {
   doc.moveDown(0.5);
   doc.y = tableY + 10;
 
-  // Pastoral Care & Follow-up
+  // ─── Pastoral Care & Follow-up ────────────────────────────
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
@@ -178,7 +179,6 @@ const generatePDFBuffer = async (reportId) => {
     .fillColor('#888')
     .text(`Status: ${statusText}`, 50, doc.y);
 
-  // Footer
   doc
     .strokeColor('#c0a85d')
     .lineWidth(1)
@@ -287,6 +287,9 @@ exports.updateReport = async (req, res) => {
       action = 'SAVE',
     } = req.body;
 
+    console.log('📝 updateReport:', { id, action });
+
+    // 1. Verify the report exists
     const existing = await prisma.monthlyReport.findUnique({
       where: { id },
       include: { fellowship: true },
@@ -296,16 +299,21 @@ exports.updateReport = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Report not found.' });
     }
 
+    // 2. ✅ Fixed authorization – use include, not select on leadingId/assistingId
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { leadingId: true, assistingId: true, role: true },
+      include: { leading: true, assisting: true },
     });
 
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const userFellowshipId = user.leading?.id || user.assisting?.id;
     const isAuthorized =
-      user?.leadingId === existing.fellowshipId ||
-      user?.assistingId === existing.fellowshipId ||
-      user?.role === 'HOD' ||
-      user?.role === 'ADMIN';
+      userFellowshipId === existing.fellowshipId ||
+      user.role === 'HOD' ||
+      user.role === 'ADMIN';
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -321,6 +329,7 @@ exports.updateReport = async (req, res) => {
       });
     }
 
+    // 3. Prepare update data
     const updateData = {
       prayerFlag: prayerFlag !== undefined ? prayerFlag : existing.prayerFlag,
       firstTimers: firstTimers !== undefined ? firstTimers : existing.firstTimers,
@@ -336,6 +345,7 @@ exports.updateReport = async (req, res) => {
       updateData.finalizedBy = userId;
     }
 
+    // 4. Update the report
     const updated = await prisma.monthlyReport.update({
       where: { id },
       data: updateData,
@@ -349,17 +359,18 @@ exports.updateReport = async (req, res) => {
       },
     });
 
-    // ─── Send email notifications on finalize ──────────────────
+    // 5. If finalizing, send emails (with try-catch to avoid blocking the response)
     if (action === 'FINALIZE') {
+      console.log('📧 Sending emails...');
       try {
         const pdfBuffer = await generatePDFBuffer(id);
+        const { sendReportEmail } = require('../services/emailService');
 
+        // Get all HODs
         const hods = await prisma.user.findMany({
           where: { role: 'HOD' },
           select: { email: true, fullName: true },
         });
-
-        const { sendReportEmail } = require('../services/emailService');
 
         for (const hod of hods) {
           if (hod.email) {
@@ -381,6 +392,7 @@ exports.updateReport = async (req, res) => {
           }
         }
 
+        // Send confirmation to the submitter
         const submitter = await prisma.user.findUnique({
           where: { id: userId },
           select: { email: true, fullName: true },
@@ -404,8 +416,8 @@ exports.updateReport = async (req, res) => {
           });
         }
       } catch (emailError) {
-        console.error('❌ Email notification failed:', emailError);
-        // Do not fail the request – just log
+        console.error('❌ Email/PDF error (but report is finalized):', emailError);
+        // Do NOT fail the request – the report is already saved
       }
     }
 
@@ -415,10 +427,11 @@ exports.updateReport = async (req, res) => {
       data: updated,
     });
   } catch (error) {
-    console.error('Update Report Error:', error);
+    console.error('❌ Update Report Error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update report.',
+      error: error.message,
     });
   }
 };
@@ -471,7 +484,7 @@ exports.getAllReports = async (req, res) => {
 exports.generatePDF = async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, role } = req.user;
+    const { userId } = req.user;
 
     const report = await prisma.monthlyReport.findUnique({
       where: { id },
@@ -491,12 +504,12 @@ exports.generatePDF = async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { leadingId: true, assistingId: true, role: true },
+      include: { leading: true, assisting: true },
     });
 
+    const userFellowshipId = user?.leading?.id || user?.assisting?.id;
     const isAuthorized =
-      user?.leadingId === report.fellowshipId ||
-      user?.assistingId === report.fellowshipId ||
+      userFellowshipId === report.fellowshipId ||
       user?.role === 'HOD' ||
       user?.role === 'ADMIN';
 
@@ -511,22 +524,25 @@ exports.generatePDF = async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    // Use the same generatePDFBuffer but pipe to response instead of buffer
+    // Use the same PDF building logic as generatePDFBuffer but pipe to response
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
     doc.pipe(res);
 
-    // Build the PDF using the same logic as generatePDFBuffer
-    // (Code repeated here; to avoid duplication, we could refactor, but for clarity we repeat)
+    // ─── Build PDF (same content as before) ────────────────────
+    // (Copy the same PDF building code from generatePDFBuffer)
+    // ─── I'll reuse the same fields as in generatePDFBuffer ──
     const formatDate = (date) => {
       if (!date) return '—';
-      const d = new Date(date);
-      return d.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
+      try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
     };
+    const safeString = (val) => val?.toString() || '—';
+    const fellowshipName = report.fellowship?.name || 'Unknown';
+    const leaderName = report.fellowship?.leader?.fullName || '—';
+    const leaderEmail = report.fellowship?.leader?.email || '—';
+    const associateName = report.fellowship?.associate?.fullName || '—';
+    const associateEmail = report.fellowship?.associate?.email || '—';
 
+    // ─── Header ────────────────────────────────────────────────
     doc
       .fontSize(18)
       .font('Helvetica-Bold')
@@ -551,6 +567,7 @@ exports.generatePDF = async (req, res) => {
       .stroke()
       .moveDown(1);
 
+    // ─── Fellowship Information ───────────────────────────────
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
     const [year, month] = report.monthYear.split('-');
@@ -572,14 +589,15 @@ exports.generatePDF = async (req, res) => {
 
     let yPos = doc.y;
     yPos = drawField('REPORT FOR THE MONTH OF', `${monthName} ${year}`, yPos);
-    yPos = drawField('NAME OF HOME FELLOWSHIP', report.fellowship.name, yPos);
-    yPos = drawField('NAME OF HOME FELLOWSHIP LEADER', report.fellowship.leader?.fullName || '—', yPos);
-    yPos = drawField('HFL Email', report.fellowship.leader?.email || '—', yPos);
-    yPos = drawField('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', report.fellowship.associate?.fullName || '—', yPos);
-    yPos = drawField('Associate HFL Email', report.fellowship.associate?.email || '—', yPos);
+    yPos = drawField('NAME OF HOME FELLOWSHIP', fellowshipName, yPos);
+    yPos = drawField('NAME OF HOME FELLOWSHIP LEADER', leaderName, yPos);
+    yPos = drawField('HFL Email', leaderEmail, yPos);
+    yPos = drawField('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', associateName, yPos);
+    yPos = drawField('Associate HFL Email', associateEmail, yPos);
 
     doc.moveDown(0.5);
 
+    // ─── Weekly Attendance Table ──────────────────────────────
     doc
       .fontSize(12)
       .font('Helvetica-Bold')
@@ -628,6 +646,7 @@ exports.generatePDF = async (req, res) => {
     doc.moveDown(0.5);
     doc.y = tableY + 10;
 
+    // ─── Pastoral Care & Follow-up ────────────────────────────
     doc
       .fontSize(12)
       .font('Helvetica-Bold')

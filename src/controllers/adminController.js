@@ -121,10 +121,11 @@ exports.getUsersByRole = async (req, res) => {
   }
 };
 
-// ---- Get all members (for Members page) ----
+// ─── Get all members (only active) ────────────────────────────
 exports.getAllMembers = async (req, res) => {
   try {
     const members = await prisma.member.findMany({
+      where: { isActive: true }, // Only active members
       include: { fellowship: true },
       orderBy: { fullName: 'asc' },
     });
@@ -165,7 +166,7 @@ exports.updateMember = async (req, res) => {
   }
 };
 
-// ─── Delete Member ──────────────────────────────────────────────
+// ─── Delete Member (soft delete) ──────────────────────────────
 exports.deleteMember = async (req, res) => {
   try {
     const { id } = req.params;
@@ -175,9 +176,17 @@ exports.deleteMember = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Member not found.' });
     }
 
-    await prisma.member.delete({ where: { id } });
+    // Soft delete: set isActive to false
+    const updated = await prisma.member.update({
+      where: { id },
+      data: { isActive: false },
+    });
 
-    res.status(200).json({ success: true, message: 'Member deleted successfully.' });
+    res.status(200).json({
+      success: true,
+      message: 'Member deactivated successfully.',
+      data: updated,
+    });
   } catch (error) {
     console.error('Delete member error:', error);
     res.status(500).json({ success: false, message: error.message });

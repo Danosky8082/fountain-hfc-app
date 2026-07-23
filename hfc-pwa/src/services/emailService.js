@@ -1,27 +1,23 @@
 const nodemailer = require('nodemailer');
 
-// Create transporter using SMTP
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
-  tls: {
-    rejectUnauthorized: false, // optional for self-signed certs
-  },
+  // Force IPv4 (fixes ENETUNREACH)
+  family: 4,
+  // Increase timeouts to avoid connection drops
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
 /**
  * Send an email with a PDF attachment
- * @param {object} options
- * @param {string} options.to - recipient email
- * @param {string} options.subject - email subject
- * @param {string} options.html - email body (HTML)
- * @param {Buffer} options.pdfBuffer - PDF file buffer
- * @param {string} options.filename - PDF filename
  */
 exports.sendReportEmail = async ({ to, subject, html, pdfBuffer, filename }) => {
   try {
@@ -30,12 +26,7 @@ exports.sendReportEmail = async ({ to, subject, html, pdfBuffer, filename }) => 
       to,
       subject,
       html,
-      attachments: [
-        {
-          filename: filename || 'monthly_report.pdf',
-          content: pdfBuffer,
-        },
-      ],
+      attachments: [{ filename: filename || 'report.pdf', content: pdfBuffer }],
     });
     console.log(`✅ Email sent to ${to}: ${info.messageId}`);
     return { success: true, messageId: info.messageId };

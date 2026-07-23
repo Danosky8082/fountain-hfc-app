@@ -58,6 +58,13 @@
             <button class="btn btn-primary" @click="saveReport(false)">💾 Save Draft</button>
             <button class="btn btn-success" @click="saveReport(true)">✅ Finalize Report</button>
             <button class="btn btn-info" @click="downloadPDF">📄 Download PDF</button>
+            <button
+  v-if="report?.status === 'FINALIZED' && (authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD' || report.fellowship.leaderId === authStore.user?.id)"
+  class="btn btn-warning"
+  @click="resetReport"
+>
+  🔄 Reset to Draft
+</button>
           </div>
         </div>
       </div>
@@ -133,4 +140,20 @@ const downloadPDF = () => {
 }
 
 onMounted(fetchReport)
+
+const resetReport = async () => {
+  if (!report.value) return;
+  if (!confirm('Are you sure you want to reset this finalized report to draft?')) return;
+  try {
+    const res = await api.post(`/reports/${report.value.id}/reset`);
+    if (res.data.success) {
+      alert('✅ Report reset to draft!');
+      await fetchReport();
+    } else {
+      alert('❌ ' + res.data.message);
+    }
+  } catch (error) {
+    alert('Error resetting report');
+  }
+};
 </script>

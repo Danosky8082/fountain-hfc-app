@@ -749,3 +749,69 @@ exports.exportCSV = async (req, res) => {
     });
   }
 };
+// ─── Reset Report to Draft ──────────────────────────────────────
+exports.resetReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, role } = req.user;
+
+    // 1. Fetch the report
+    const report = await prisma.monthlyReport.findUnique({
+      where: { id },
+      include: { fellowship: true },
+    });
+
+    if (!report) {
+      return res.status(404).json({ success: false, message: 'Report not found.' });
+    }
+
+    // 2. Only allow if status is FINALIZED
+    if (report.status !== 'FINALIZED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only finalized reports can be reset to draft.',
+      });
+    }
+
+    // 3. Check authorization (admin or the FL who owns the report)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { leading: true, assisting: true },
+    });
+
+    const userFellowshipId = user?.leading?.id || user?.assisting?.id;
+    const isAuthorized =
+      userFellowshipId === report.fellowshipId ||
+      role === 'ADMIN' ||
+      role === 'HOD';
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to reset this report.',
+      });
+    }
+
+    // 4. Reset to DRAFT
+    const updated = await prisma.monthlyReport.update({
+      where: { id },
+      data: {
+        status: 'DRAFT',
+        finalizedAt: null,
+        finalizedBy: null,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Report reset to draft successfully.',
+      data: updated,
+    });
+  } catch (error) {
+    console.error('Reset Report Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset report.',
+    });
+  }
+};

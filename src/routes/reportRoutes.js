@@ -10,5 +10,6 @@ router.put('/:id', verifyToken, reportController.updateReport);
 router.get('/all', verifyToken, reportController.getAllReports);
 router.get('/:id/pdf', verifyToken, reportController.generatePDF);
 router.get('/csv', verifyToken, reportController.exportCSV);
+router.post('/:id/reset', verifyToken, reportController.resetReport);
 
 module.exports = router;

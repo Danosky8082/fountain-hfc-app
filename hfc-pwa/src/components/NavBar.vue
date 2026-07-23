@@ -27,16 +27,17 @@
           <li class="nav-item">
             <router-link class="nav-link" to="/attendance">Attendance</router-link>
           </li>
-          <li class="nav-item" v-if="isAdmin">
+          <!-- Members – Admin only -->
+          <li class="nav-item" v-if="authStore.user?.role === 'ADMIN'">
             <router-link class="nav-link" to="/members">Members</router-link>
           </li>
           <li class="nav-item">
             <router-link class="nav-link" to="/report">Report</router-link>
           </li>
-          <li class="nav-item" v-if="isAdminOrHod">
+          <!-- Correction – HOD or ADMIN -->
+          <li class="nav-item" v-if="authStore.user?.role === 'HOD' || authStore.user?.role === 'ADMIN'">
             <router-link class="nav-link" to="/admin/correction">📝 Correction</router-link>
           </li>
-          <!-- (Optional) Add HOD Dashboard link here if needed -->
         </ul>
         <button class="btn btn-outline-light" @click="logout">Logout</button>
       </div>
@@ -47,17 +48,9 @@
 <script setup>
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
-import { computed } from "vue";
 
 const authStore = useAuthStore();
 const router = useRouter();
-
-// ─── Computed ──────────────────────────────────────────────────
-const isAdmin = computed(() => authStore.user?.role === 'ADMIN');
-const isAdminOrHod = computed(() => {
-  const role = authStore.user?.role;
-  return role === 'ADMIN' || role === 'HOD';
-});
 
 const logout = () => {
   authStore.logout();

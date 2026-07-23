@@ -3,12 +3,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-// ─── Helper: Generate 6-digit OTP ─────────────────────────────
+// ─── Helper: Generate 6‑digit OTP ─────────────────────────────
 const generateOTP = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
-// ─── Existing password login (for HOD/ADMIN) ──────────────────
+// ─── Password Login (for HOD/ADMIN) ───────────────────────────
 exports.login = async (req, res) => {
   try {
     const { churchId, password } = req.body;
@@ -86,6 +86,7 @@ exports.login = async (req, res) => {
   }
 };
 
+// ─── Get Current User ───────────────────────────────────────────
 exports.getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
@@ -106,7 +107,7 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// ─── Request OTP (with debug mode) ─────────────────────────────
+// ─── Request OTP (for FL/ASSOCIATE) ────────────────────────────
 exports.requestOTP = async (req, res) => {
   try {
     const { churchId } = req.body;
@@ -128,7 +129,7 @@ exports.requestOTP = async (req, res) => {
 
     console.log(`👤 User found: ${user.fullName} (${user.role})`);
 
-    // Only FL and ASSOCIATE can use OTP login
+    // Only FL and ASSOCIATE
     if (user.role !== 'FL' && user.role !== 'ASSOCIATE') {
       console.warn('❌ Role not allowed:', user.role);
       return res.status(403).json({
@@ -147,13 +148,13 @@ exports.requestOTP = async (req, res) => {
 
     console.log('📧 Email found:', user.email);
 
-    // ─── Generate OTP ────────────────────────────────────────────
+    // Generate OTP
     const otp = generateOTP();
     console.log('🔑 Generated OTP:', otp);
 
     const hashedOtp = await bcrypt.hash(otp, 10);
 
-    // Delete any existing unused OTPs for this user
+    // Delete old unused OTPs
     await prisma.oTP.deleteMany({
       where: {
         userId: user.id,
@@ -172,16 +173,7 @@ exports.requestOTP = async (req, res) => {
     });
     console.log('✅ OTP saved to database');
 
-    // ─── DEBUG MODE: Return OTP directly (bypass email) ──────
-    // Remove this block once email is working.
-    console.log('🔑 Returning OTP directly (debug mode)');
-    return res.status(200).json({
-      success: true,
-      message: 'OTP generated (debug)',
-      data: { userId: user.id, otp: otp },
-    });
-
-     // ─── Send OTP via email ──────────────────────────────────────
+    // ─── Send email ──────────────────────────────────────────────
     try {
       const { sendReportEmail } = require('../services/emailService');
       const result = await sendReportEmail({
@@ -245,7 +237,7 @@ exports.verifyOTP = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    // Find the latest unused OTP for this user
+    // Find the latest unused OTP for this user (not expired)
     const otpRecord = await prisma.oTP.findFirst({
       where: {
         userId: user.id,
@@ -262,7 +254,6 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    // Verify OTP
     const isValid = await bcrypt.compare(otp, otpRecord.otp);
     if (!isValid) {
       return res.status(400).json({ success: false, message: 'Invalid OTP.' });
@@ -274,7 +265,6 @@ exports.verifyOTP = async (req, res) => {
       data: { used: true },
     });
 
-    // Issue JWT token
     const fellowship = user.leading || user.assisting;
     const token = jwt.sign(
       {

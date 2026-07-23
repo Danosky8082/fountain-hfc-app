@@ -232,30 +232,44 @@ exports.updateFellowship = async (req, res) => {
   }
 };
 
-// ─── Delete Fellowship (only if no members) ──────────────────────
+// ─── Delete Fellowship (cascade) ──────────────────────────────
 exports.deleteFellowship = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // 1. Check if fellowship exists
     const fellowship = await prisma.fellowship.findUnique({
       where: { id },
-      include: { _count: { select: { members: true } } },
     });
-
     if (!fellowship) {
       return res.status(404).json({ success: false, message: 'Fellowship not found.' });
     }
 
-    if (fellowship._count.members > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot delete fellowship with ${fellowship._count.members} member(s). Remove all members first.`,
-      });
-    }
+    // 2. Delete all related data in the correct order (to avoid FK errors)
 
+    // a. Delete MonthlyReports
+    await prisma.monthlyReport.deleteMany({ where: { fellowshipId: id } });
+
+    // b. Delete AttendanceRecords (via AttendanceSessions)
+    const sessions = await prisma.attendanceSession.findMany({
+      where: { fellowshipId: id },
+      select: { id: true },
+    });
+    for (const session of sessions) {
+      await prisma.attendanceRecord.deleteMany({ where: { sessionId: session.id } });
+    }
+    await prisma.attendanceSession.deleteMany({ where: { fellowshipId: id } });
+
+    // c. Delete Members (they may have attendance records – already deleted)
+    await prisma.member.deleteMany({ where: { fellowshipId: id } });
+
+    // 3. Finally delete the fellowship itself
     await prisma.fellowship.delete({ where: { id } });
 
-    res.status(200).json({ success: true, message: 'Fellowship deleted successfully.' });
+    res.status(200).json({
+      success: true,
+      message: 'Fellowship and all associated data deleted successfully.',
+    });
   } catch (error) {
     console.error('Delete fellowship error:', error);
     res.status(500).json({ success: false, message: error.message });

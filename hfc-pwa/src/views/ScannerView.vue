@@ -49,7 +49,6 @@ let html5QrCode = null
 const stopScanner = async () => {
   if (html5QrCode) {
     try {
-      // Check if scanning is active
       if (html5QrCode.isScanning) {
         await html5QrCode.stop()
       }
@@ -58,6 +57,26 @@ const stopScanner = async () => {
       console.warn('Scanner cleanup warning:', err.message)
     }
     html5QrCode = null
+  }
+}
+
+// ─── QR scan callback (parses JSON) ────────────────────────────
+const onScanSuccess = (decodedText) => {
+  try {
+    const data = JSON.parse(decodedText)
+    scanResult.value = data.id // extract member ID
+  } catch {
+    // Fallback: if not JSON, use raw text (old QR codes)
+    scanResult.value = decodedText
+  }
+  if (html5QrCode && html5QrCode.isScanning) {
+    html5QrCode.stop().catch(() => {})
+  }
+}
+
+const onScanError = (error) => {
+  if (error && error.includes('Permission')) {
+    scanError.value = 'Permission denied. Please allow camera access in browser settings.'
   }
 }
 
@@ -71,23 +90,9 @@ onMounted(() => {
     html5QrCode = new Html5Qrcode('qr-reader')
     html5QrCode.start(
       { facingMode: 'environment' },
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-      },
-      (decodedText) => {
-        scanResult.value = decodedText
-        // Stop scanning after successful scan
-        if (html5QrCode && html5QrCode.isScanning) {
-          html5QrCode.stop().catch(() => {})
-        }
-      },
-      (error) => {
-        // Ignore continuous scan errors
-        if (error && error.includes('Permission')) {
-          scanError.value = 'Permission denied. Please allow camera access in browser settings.'
-        }
-      }
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onScanSuccess,
+      onScanError
     ).catch((err) => {
       console.error('QR Start Error:', err)
       if (err.name === 'NotAllowedError') {
@@ -104,7 +109,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // ✅ Clean up on unmount
   stopScanner()
 })
 
@@ -128,13 +132,8 @@ const markPresent = async () => {
         html5QrCode.start(
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decodedText) => {
-            scanResult.value = decodedText
-            if (html5QrCode && html5QrCode.isScanning) {
-              html5QrCode.stop().catch(() => {})
-            }
-          },
-          (error) => {}
+          onScanSuccess,
+          onScanError
         ).catch(() => {})
       }
     } else {

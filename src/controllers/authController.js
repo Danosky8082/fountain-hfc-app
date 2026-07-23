@@ -3,16 +3,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-// ─── Helper: Generate 6‑digit OTP ─────────────────────────────
 const generateOTP = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
-// ─── Password Login (for HOD/ADMIN) ───────────────────────────
+// ─── Password Login ────────────────────────────────────────────
 exports.login = async (req, res) => {
   try {
     const { churchId, password } = req.body;
-
     if (!churchId || !password) {
       return res.status(400).json({
         success: false,
@@ -22,10 +20,7 @@ exports.login = async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { churchId: churchId.trim() },
-      include: {
-        leading: true,
-        assisting: true,
-      },
+      include: { leading: true, assisting: true },
     });
 
     if (!user) {
@@ -81,7 +76,7 @@ exports.login = async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error. Please try again later.',
+      message: 'Internal server error.',
     });
   }
 };
@@ -91,10 +86,7 @@ exports.getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      include: {
-        leading: true,
-        assisting: true,
-      },
+      include: { leading: true, assisting: true },
     });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -107,7 +99,7 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// ─── Request OTP (for FL/ASSOCIATE) ────────────────────────────
+// ─── Request OTP (FL/ASSOCIATE) ────────────────────────────────
 exports.requestOTP = async (req, res) => {
   try {
     const { churchId } = req.body;
@@ -129,7 +121,6 @@ exports.requestOTP = async (req, res) => {
 
     console.log(`👤 User found: ${user.fullName} (${user.role})`);
 
-    // Only FL and ASSOCIATE
     if (user.role !== 'FL' && user.role !== 'ASSOCIATE') {
       console.warn('❌ Role not allowed:', user.role);
       return res.status(403).json({
@@ -148,13 +139,11 @@ exports.requestOTP = async (req, res) => {
 
     console.log('📧 Email found:', user.email);
 
-    // Generate OTP
     const otp = generateOTP();
     console.log('🔑 Generated OTP:', otp);
 
     const hashedOtp = await bcrypt.hash(otp, 10);
 
-    // Delete old unused OTPs
     await prisma.oTP.deleteMany({
       where: {
         userId: user.id,
@@ -162,7 +151,6 @@ exports.requestOTP = async (req, res) => {
       },
     });
 
-    // Save new OTP (expires in 5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await prisma.oTP.create({
       data: {
@@ -173,7 +161,16 @@ exports.requestOTP = async (req, res) => {
     });
     console.log('✅ OTP saved to database');
 
-    // ─── Send email ──────────────────────────────────────────────
+    // ─── DEBUG MODE: Return OTP directly (bypass email) ──────
+    console.log('🔑 Returning OTP directly (debug mode)');
+    return res.status(200).json({
+      success: true,
+      message: 'OTP generated (debug)',
+      data: { userId: user.id, otp: otp },
+    });
+
+    // ─── (Real email – uncomment when SMTP works) ────────────
+    /*
     try {
       const { sendReportEmail } = require('../services/emailService');
       const result = await sendReportEmail({
@@ -207,12 +204,8 @@ exports.requestOTP = async (req, res) => {
         message: 'Email service unavailable.',
       });
     }
+    */
 
-    res.status(200).json({
-      success: true,
-      message: 'OTP sent to your email.',
-      data: { userId: user.id, role: user.role },
-    });
   } catch (error) {
     console.error('❌ Request OTP error:', error);
     console.error(error.stack);
@@ -237,7 +230,6 @@ exports.verifyOTP = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    // Find the latest unused OTP for this user (not expired)
     const otpRecord = await prisma.oTP.findFirst({
       where: {
         userId: user.id,
@@ -259,7 +251,6 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP.' });
     }
 
-    // Mark OTP as used
     await prisma.oTP.update({
       where: { id: otpRecord.id },
       data: { used: true },

@@ -98,7 +98,6 @@ const reportQuestions = ref({
   comments: '',
 })
 
-// ─── Fetch current session data ──────────────────────────────
 const fetchData = async () => {
   try {
     const res = await api.get('/attendance/current-session')
@@ -113,10 +112,8 @@ const fetchData = async () => {
   }
 }
 
-// ─── Open the report modal ────────────────────────────────────
 const openReportModal = () => {
   if (submitting.value) return
-  // Reset report questions (or keep existing values)
   reportQuestions.value = {
     prayerFlag: false,
     firstTimers: 0,
@@ -128,39 +125,54 @@ const openReportModal = () => {
   showReportModal.value = true
 }
 
-// ─── Submit week with report data ────────────────────────────
+// ─── Corrected submit logic ────────────────────────────────────
 const submitWeekWithReport = async () => {
   submitting.value = true
   try {
-    // 1. Submit the week attendance (with enhanced missing‑week handling)
-    let weekRes = await api.post('/attendance/submit-week', {})
+    // 1. Attempt to submit the week
+    let weekRes
+    try {
+      weekRes = await api.post('/attendance/submit-week', {})
+    } catch (error) {
+      // If the error is a 400 with missingWeeks data, handle it
+      if (error.response && error.response.status === 400 && error.response.data.missingWeeks && error.response.data.canForce) {
+        weekRes = error.response.data
+      } else {
+        throw error
+      }
+    }
 
-    // 2. If the backend reports missing weeks and allows force submit
-    if (weekRes.data.missingWeeks && weekRes.data.canForce) {
-      const weekList = weekRes.data.missingWeeks.join(', ')
+    // 2. Check if we have missing weeks
+    if (weekRes.missingWeeks && weekRes.canForce) {
+      const weekList = weekRes.missingWeeks.join(', ')
       const userConfirmed = confirm(
         `⚠️ You are missing submissions for Week(s) ${weekList}.\n\n` +
         `Do you want to continue submitting Week ${session.value.weekNumber}?\n` +
         `Missing weeks will be marked with zero attendance.`
       )
       if (userConfirmed) {
-        // Force submit
-        weekRes = await api.post('/attendance/submit-week', { force: true })
+        const forceRes = await api.post('/attendance/submit-week', { force: true })
+        if (forceRes.data.success) {
+          weekRes = forceRes.data
+        } else {
+          alert('❌ ' + forceRes.data.message)
+          submitting.value = false
+          return
+        }
       } else {
-        // User cancelled – abort
         submitting.value = false
         return
       }
     }
 
-    // 3. Check if the submission succeeded
-    if (!weekRes.data.success) {
-      alert('❌ ' + weekRes.data.message)
+    // 3. Check if submission succeeded
+    if (!weekRes.success) {
+      alert('❌ ' + weekRes.message)
       submitting.value = false
       return
     }
 
-    // 4. Save the report questions
+    // 4. Save report questions
     const reportRes = await api.get('/reports/current')
     if (reportRes.data.success) {
       const reportId = reportRes.data.data.id
@@ -177,10 +189,9 @@ const submitWeekWithReport = async () => {
 
     alert('✅ Week submitted with report data!')
     showReportModal.value = false
-    await fetchData() // refresh
+    await fetchData()
   } catch (error) {
     console.error('Error submitting week:', error)
-    // Handle other errors (e.g., network, validation)
     const errMsg = error.response?.data?.message || error.message
     alert('❌ Error: ' + errMsg)
   } finally {

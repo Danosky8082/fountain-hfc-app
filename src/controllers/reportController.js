@@ -386,74 +386,62 @@ exports.updateReport = async (req, res) => {
    if (action === 'FINALIZE') {
   console.log('📧 Sending emails...');
   try {
+    console.log('🔍 Step 1: Generating PDF buffer...');
     const pdfBuffer = await generatePDFBuffer(id);
-    const { sendReportEmail } = require('../services/emailService');
+    console.log(`✅ PDF buffer generated (${pdfBuffer.length} bytes)`);
 
-    // Get all HODs
+    console.log('🔍 Step 2: Loading email service...');
+    const { sendReportEmail } = require('../services/emailService');
+    console.log('✅ Email service loaded');
+
     const hods = await prisma.user.findMany({
       where: { role: 'HOD' },
       select: { email: true, fullName: true },
     });
-
-    if (hods.length === 0) {
-      console.log('⚠️ No HODs found – skipping emails.');
-    }
+    console.log(`🔍 Found ${hods.length} HOD(s)`);
 
     for (const hod of hods) {
       if (hod.email) {
+        console.log(`📤 Sending to ${hod.email}...`);
         const result = await sendReportEmail({
           to: hod.email,
           subject: `📊 Monthly Report - ${updated.fellowship.name} (${updated.monthYear})`,
-          html: `
-            <h2>Monthly Report Finalized</h2>
-            <p><strong>Fellowship:</strong> ${updated.fellowship.name}</p>
-            <p><strong>Month:</strong> ${updated.monthYear}</p>
-            <p><strong>Status:</strong> ${updated.status}</p>
-            <p>Please find the full PDF attached.</p>
-            <hr />
-            <p><em>This email was sent automatically by the Fountain HFC system.</em></p>
-          `,
+          html: `<h2>Monthly Report Finalized</h2>...`,
           pdfBuffer,
           filename: `HFC_Report_${updated.fellowship.name}_${updated.monthYear}.pdf`,
         });
         if (result.success) {
-          console.log(`✅ Email sent to HOD: ${hod.email}`);
+          console.log(`✅ Email sent to ${hod.email}`);
         } else {
-          console.error(`❌ Failed to send email to HOD: ${hod.email} - ${result.error}`);
+          console.error(`❌ Failed to send to ${hod.email}: ${result.error}`);
         }
       }
     }
 
-    // Send confirmation to the submitter
+    // Send confirmation to submitter
     const submitter = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, fullName: true },
+      select: { email: true },
     });
-
     if (submitter?.email) {
+      console.log(`📤 Sending confirmation to ${submitter.email}...`);
       const result = await sendReportEmail({
         to: submitter.email,
         subject: `✅ Report Finalized - ${updated.fellowship.name} (${updated.monthYear})`,
-        html: `
-          <h2>Your Report Has Been Finalized</h2>
-          <p><strong>Fellowship:</strong> ${updated.fellowship.name}</p>
-          <p><strong>Month:</strong> ${updated.monthYear}</p>
-          <p>Thank you for submitting your report. The HODs have been notified.</p>
-          <p>Attached is a copy of your final report for your records.</p>
-          <hr />
-          <p><em>This email was sent automatically by the Fountain HFC system.</em></p>
-        `,
+        html: `<h2>Your Report Has Been Finalized</h2>...`,
         pdfBuffer,
         filename: `HFC_Report_${updated.fellowship.name}_${updated.monthYear}.pdf`,
       });
       if (result.success) {
-        console.log(`✅ Confirmation email sent to FL: ${submitter.email}`);
+        console.log(`✅ Confirmation sent to ${submitter.email}`);
       } else {
-        console.error(`❌ Failed to send confirmation to FL: ${submitter.email} - ${result.error}`);
+        console.error(`❌ Failed to send confirmation: ${result.error}`);
       }
     }
   } catch (emailError) {
     console.error('❌ Email/PDF error (but report is finalized):', emailError);
+    // Log the full stack trace
+    console.error(emailError.stack);
   }
 }
 

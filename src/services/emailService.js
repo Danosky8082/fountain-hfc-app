@@ -20,7 +20,7 @@ exports.sendReportEmail = async ({ to, subject, html, pdfBuffer, filename }) => 
       attachments: [{ filename: filename || 'report.pdf', content: pdfBuffer }],
     });
     console.log(`✅ Email sent to ${to}`);
-    return { success: true };
+    return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Email error:', error);
     return { success: false, error: error.message };

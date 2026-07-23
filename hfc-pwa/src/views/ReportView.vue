@@ -213,11 +213,10 @@ const saveReport = async (finalize) => {
         : '💾 Draft saved!';
       message.value = successMsg;
       messageClass.value = 'text-success';
-      // Show a pop-up alert for finalize
       if (finalize) {
         alert(successMsg);
       }
-      await fetchReport(); // refresh
+      await fetchReport();
     } else {
       message.value = '❌ ' + res.data.message;
       messageClass.value = 'text-danger';

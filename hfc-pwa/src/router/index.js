@@ -66,11 +66,11 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
-  path: '/admin/correction',
-  name: 'AdminCorrection',
-  component: () => import('../views/AdminCorrectionView.vue'),
-  meta: { requiresAuth: true, requiresHOD: true },
-},
+      path: '/admin/correction',
+      name: 'AdminCorrection',
+      component: () => import('../views/AdminCorrectionView.vue'),
+      meta: { requiresAuth: true, requiresHOD: true },
+    },
   ],
 });
 

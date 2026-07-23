@@ -39,14 +39,7 @@
               <div v-if="error" class="alert alert-danger mt-3">{{ error }}</div>
             </form>
 
-            <!-- Password login link (for HOD/ADMIN) -->
-            <div class="mt-3 text-center">
-              <a href="#" @click.prevent="showPasswordLogin = !showPasswordLogin">
-                {{ showPasswordLogin ? 'Back to OTP login' : 'Login with password (HOD/Admin only)' }}
-              </a>
-            </div>
-
-            <!-- Password Login (collapsible) -->
+            <!-- Password Login (visible when toggled or auto‑triggered) -->
             <form v-if="showPasswordLogin" @submit.prevent="handlePasswordLogin" class="mt-3">
               <div class="mb-3">
                 <label class="form-label">Church ID</label>
@@ -62,6 +55,13 @@
               </button>
               <div v-if="passwordError" class="alert alert-danger mt-3">{{ passwordError }}</div>
             </form>
+
+            <!-- Toggle for manual password login -->
+            <div class="mt-3 text-center">
+              <a href="#" @click.prevent="showPasswordLogin = !showPasswordLogin">
+                {{ showPasswordLogin ? 'Back to OTP login' : 'Login with password (HOD/Admin only)' }}
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -104,7 +104,14 @@ const requestOTP = async () => {
       error.value = res.data.message;
     }
   } catch (err) {
-    error.value = err.response?.data?.message || 'Error requesting OTP.';
+    if (err.response?.status === 403 && err.response?.data?.message === 'Please use password login for this account.') {
+      // Automatically switch to password login
+      showPasswordLogin.value = true;
+      passwordChurchId.value = churchId.value;
+      error.value = 'This account requires password login. Please enter your password.';
+    } else {
+      error.value = err.response?.data?.message || 'Error requesting OTP.';
+    }
   } finally {
     loading.value = false;
   }

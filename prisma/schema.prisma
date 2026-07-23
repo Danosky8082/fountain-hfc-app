@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  FL
+  ASSOCIATE
+  HOD
+  ADMIN
+}
+
+enum ReportStatus {
+  DRAFT
+  FINALIZED
+}
+
 model Fellowship {
   id            String   @id @default(cuid())
   name          String
@@ -35,6 +47,7 @@ model User {
   leading       Fellowship? @relation("LeaderRelation")
   assisting     Fellowship? @relation("AssociateRelation")
   submittedSessions AttendanceSession[]
+  otps          OTP[]   // 👈 Reverse relation for OTP
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -46,7 +59,7 @@ model Member {
   phone         String?
   email         String?
   qrUniqueId    String   @unique
-  memberNumber  String?  @unique   // <-- Add this field
+  memberNumber  String?  @unique
   isActive      Boolean  @default(true)
 
   fellowshipId  String
@@ -95,7 +108,7 @@ model MonthlyReport {
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
   monthYear     String
-  
+
   week1Date     DateTime?
   week2Date     DateTime?
   week3Date     DateTime?
@@ -106,32 +119,33 @@ model MonthlyReport {
   week3Count    Int      @default(0)
   week4Count    Int      @default(0)
   week5Count    Int      @default(0)
-  
+
   prayerFlag    Boolean  @default(false)
   firstTimers   Int      @default(0)
   newMembers    Int      @default(0)
   followUps     Int      @default(0)
   escalations   String?
   comments      String?
-  
+
   status        ReportStatus @default(DRAFT)
   finalizedAt   DateTime?
   finalizedBy   String?
-  
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@unique([fellowshipId, monthYear])
 }
 
-enum ReportStatus {
-  DRAFT
-  FINALIZED
-}
+model OTP {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  otp       String   // hashed 6‑digit code
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 
-enum Role {
-  FL
-  ASSOCIATE
-  HOD
-  ADMIN
+  @@index([userId, used])
+  @@index([expiresAt])
 }

@@ -1,15 +1,18 @@
-// src/routes/reportRoutes.js
 const express = require('express');
 const router = express.Router();
 const reportController = require('../controllers/reportController');
 const { verifyToken } = require('../middlewares/authMiddleware');
 
-// All routes protected by JWT
-router.get('/current', verifyToken, reportController.getCurrentReport);
-router.put('/:id', verifyToken, reportController.updateReport);
-router.get('/all', verifyToken, reportController.getAllReports);
-router.get('/:id/pdf', verifyToken, reportController.generatePDF);
-router.get('/csv', verifyToken, reportController.exportCSV);
-router.post('/:id/reset', verifyToken, reportController.resetReport);
+// All routes require authentication
+router.use(verifyToken);
+
+// ─── Routes ──────────────────────────────────────────────────
+router.get('/current', reportController.getCurrentReport);
+router.get('/all', reportController.getAllReports);
+router.get('/csv', reportController.exportCSV);
+router.get('/:id/pdf', reportController.generatePDF);
+
+// Update report – handles SAVE, FINALIZE, and RESET_TO_DRAFT via `action` field
+router.put('/:id', reportController.updateReport);
 
 module.exports = router;

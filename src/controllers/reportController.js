@@ -785,3 +785,9 @@ exports.exportCSV = async (req, res) => {
     });
   }
 };
+
+exports.getCurrentReport = getCurrentReport;
+exports.getAllReports = getAllReports;
+exports.exportCSV = exportCSV;
+exports.generatePDF = generatePDF;
+exports.updateReport = updateReport;

@@ -11,6 +11,8 @@ router.use(requireRole(['ADMIN']));
 // User management
 router.get('/users', adminController.getUsersByRole);
 router.post('/user', adminController.createUser);
+router.put('/member/:id', adminController.updateMember);
+router.delete('/member/:id', adminController.deleteMember);
 
 // Fellowship management
 router.post('/fellowship', adminController.createFellowship);

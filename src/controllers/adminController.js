@@ -133,3 +133,53 @@ exports.getAllMembers = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ─── Update Member ──────────────────────────────────────────────
+exports.updateMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fullName, phone, email, memberNumber, fellowshipId } = req.body;
+
+    // Check if member exists
+    const existing = await prisma.member.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Member not found.' });
+    }
+
+    // Update
+    const updated = await prisma.member.update({
+      where: { id },
+      data: {
+        fullName,
+        phone: phone || null,
+        email: email || null,
+        memberNumber: memberNumber || null,
+        fellowshipId,
+      },
+    });
+
+    res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Update member error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Delete Member ──────────────────────────────────────────────
+exports.deleteMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existing = await prisma.member.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Member not found.' });
+    }
+
+    await prisma.member.delete({ where: { id } });
+
+    res.status(200).json({ success: true, message: 'Member deleted successfully.' });
+  } catch (error) {
+    console.error('Delete member error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

@@ -4,20 +4,23 @@ require('dotenv').config();
 
 const app = express();
 
-// --- Manual CORS Middleware (handles ALL requests, including OPTIONS) ---
+// ─── Manual CORS Middleware ─────────────────────────────────────
 app.use((req, res, next) => {
-  // Set CORS headers for all responses
-  res.setHeader('Access-Control-Allow-Origin', 'https://fountain-hfc-app.vercel.app');
+  const origin = req.headers.origin;
+  // Allow your frontend domain
+  const allowedOrigins = ['https://fountain-hfc-app.vercel.app', 'http://localhost:5173'];
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
-  // Handle preflight (OPTIONS) requests immediately – no route needed
+
+  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
     return;
   }
-  
   next();
 });
 

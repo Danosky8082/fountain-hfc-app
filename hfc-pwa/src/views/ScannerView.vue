@@ -10,9 +10,7 @@
     <div v-if="scanError" class="alert alert-warning mt-3">
       <h5>⚠️ Camera Not Available</h5>
       <p>{{ scanError }}</p>
-      <p class="small">
-        This usually happens when the page is loaded over HTTP instead of HTTPS, or permissions are blocked.
-      </p>
+      <p class="small">This usually happens when the page is loaded over HTTP instead of HTTPS, or permissions are blocked.</p>
       <button class="btn btn-primary btn-sm" @click="goToManual">Go to Manual Check-in</button>
     </div>
 
@@ -34,88 +32,94 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Html5Qrcode } from 'html5-qrcode'
-import api from '../services/api'
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { Html5Qrcode } from 'html5-qrcode';
+import api from '../services/api';
 
-const router = useRouter()
-const scanResult = ref(null)
-const scanError = ref(null)
-const manualMemberId = ref('')
-let html5QrCode = null
+const router = useRouter();
+const scanResult = ref(null);
+const scanError = ref(null);
+const manualMemberId = ref('');
+let html5QrCode = null;
 
-// ✅ Safe cleanup – stop first, then clear
+// ─── Responsive QR box ──────────────────────────────────────────
+const qrboxSize = ref(250);
+
+const updateQrboxSize = () => {
+  const width = window.innerWidth;
+  // Use 80% of screen width, max 300px, min 200px
+  const size = Math.min(Math.max(width * 0.8, 200), 300);
+  qrboxSize.value = size;
+};
+
+// ─── Safe cleanup ───────────────────────────────────────────────
 const stopScanner = async () => {
   if (html5QrCode) {
     try {
       if (html5QrCode.isScanning) {
-        await html5QrCode.stop()
+        await html5QrCode.stop();
       }
-      await html5QrCode.clear()
+      await html5QrCode.clear();
     } catch (err) {
-      console.warn('Scanner cleanup warning:', err.message)
+      console.warn('Scanner cleanup warning:', err.message);
     }
-    html5QrCode = null
+    html5QrCode = null;
   }
-}
-
-// ─── QR scan callback (parses JSON) ────────────────────────────
-const onScanSuccess = (decodedText) => {
-  try {
-    const data = JSON.parse(decodedText)
-    scanResult.value = data.id // extract member ID
-  } catch {
-    // Fallback: if not JSON, use raw text (old QR codes)
-    scanResult.value = decodedText
-  }
-  if (html5QrCode && html5QrCode.isScanning) {
-    html5QrCode.stop().catch(() => {})
-  }
-}
-
-const onScanError = (error) => {
-  if (error && error.includes('Permission')) {
-    scanError.value = 'Permission denied. Please allow camera access in browser settings.'
-  }
-}
+};
 
 onMounted(() => {
+  updateQrboxSize();
+  window.addEventListener('resize', updateQrboxSize);
+
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    scanError.value = 'Camera not supported on this device/browser.'
-    return
+    scanError.value = 'Camera not supported on this device/browser.';
+    return;
   }
 
   try {
-    html5QrCode = new Html5Qrcode('qr-reader')
+    html5QrCode = new Html5Qrcode('qr-reader');
     html5QrCode.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      onScanSuccess,
-      onScanError
-    ).catch((err) => {
-      console.error('QR Start Error:', err)
-      if (err.name === 'NotAllowedError') {
-        scanError.value = 'Camera permission blocked. Please enable camera for this site in your browser settings (lock icon).'
-      } else if (err.name === 'NotFoundError' || err.name === 'NotReadableError') {
-        scanError.value = 'No camera found or camera busy. Try closing other apps using the camera.'
-      } else {
-        scanError.value = `Camera unavailable: ${err.message}. Try using Manual Check-in.`
+      {
+        fps: 10,
+        qrbox: { width: qrboxSize.value, height: qrboxSize.value },
+      },
+      (decodedText) => {
+        scanResult.value = decodedText;
+        if (html5QrCode && html5QrCode.isScanning) {
+          html5QrCode.stop().catch(() => {});
+        }
+      },
+      (error) => {
+        if (error && error.includes('Permission')) {
+          scanError.value = 'Permission denied. Please allow camera access in browser settings.';
+        }
       }
-    })
+    ).catch((err) => {
+      console.error('QR Start Error:', err);
+      if (err.name === 'NotAllowedError') {
+        scanError.value = 'Camera permission blocked. Please enable camera for this site in your browser settings (lock icon).';
+      } else if (err.name === 'NotFoundError' || err.name === 'NotReadableError') {
+        scanError.value = 'No camera found or camera busy. Try closing other apps using the camera.';
+      } else {
+        scanError.value = `Camera unavailable: ${err.message}. Try using Manual Check-in.`;
+      }
+    });
   } catch (err) {
-    scanError.value = 'Failed to initialize scanner. Please use Manual Check-in.'
+    scanError.value = 'Failed to initialize scanner. Please use Manual Check-in.';
   }
-})
+});
 
 onUnmounted(() => {
-  stopScanner()
-})
+  window.removeEventListener('resize', updateQrboxSize);
+  stopScanner();
+});
 
 const goToManual = () => {
-  stopScanner()
-  router.push('/manual')
-}
+  stopScanner();
+  router.push('/manual');
+};
 
 const markPresent = async () => {
   if (!scanResult.value) {
@@ -125,11 +129,10 @@ const markPresent = async () => {
 
   let memberId = scanResult.value;
   try {
-    // If QR data is JSON (we encoded it with id, name, fellowship)
     const parsed = JSON.parse(scanResult.value);
     memberId = parsed.id;
   } catch (e) {
-    // It's a plain string – use as is (fallback)
+    // fallback – treat as plain string
   }
 
   if (!memberId) {
@@ -140,19 +143,26 @@ const markPresent = async () => {
   try {
     const response = await api.post('/attendance/mark', {
       memberId: memberId,
-      checkInMethod: 'QR_SCAN'
+      checkInMethod: 'QR_SCAN',
     });
     if (response.data.success) {
       alert('✅ Check-in successful!');
       scanResult.value = null;
-      // Restart scanner after check‑in
       if (html5QrCode && !html5QrCode.isScanning) {
         html5QrCode.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          onScanSuccess,
-          onScanError
-        ).catch(() => {})
+          {
+            fps: 10,
+            qrbox: { width: qrboxSize.value, height: qrboxSize.value },
+          },
+          (decodedText) => {
+            scanResult.value = decodedText;
+            if (html5QrCode && html5QrCode.isScanning) {
+              html5QrCode.stop().catch(() => {});
+            }
+          },
+          (error) => {}
+        ).catch(() => {});
       }
     } else {
       alert('❌ Failed: ' + (response.data.message || 'Check-in failed.'));
@@ -172,7 +182,7 @@ const markManualPresent = async () => {
   try {
     const response = await api.post('/attendance/mark', {
       memberId: manualMemberId.value.trim(),
-      checkInMethod: 'MANUAL'
+      checkInMethod: 'MANUAL',
     });
     if (response.data.success) {
       alert('✅ Check-in successful!');
@@ -183,9 +193,13 @@ const markManualPresent = async () => {
   } catch (error) {
     alert('Error marking attendance');
   }
-}
+};
 </script>
 
 <style scoped>
-/* optional styling */
+.qr-reader {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
 </style>

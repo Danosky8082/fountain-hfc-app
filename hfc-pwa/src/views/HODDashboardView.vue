@@ -23,7 +23,7 @@
           <option value="FINALIZED">Finalized</option>
         </select>
       </div>
-      <div class="col-md-3 d-flex align-items-end gap-2">
+      <div class="col-md-3 d-flex align-items-end gap-2 flex-wrap">
         <button class="btn btn-success" @click="exportCSV">📥 Export CSV</button>
         <button class="btn btn-info" @click="downloadAllPDFs">📄 Download All PDFs</button>
       </div>
@@ -41,37 +41,39 @@
     <div v-if="loading" class="text-center"><LoadingSpinner /></div>
     <div v-else-if="filteredReports.length === 0" class="alert alert-info">No reports found for the selected filters.</div>
     <div v-else>
-      <table class="table table-bordered table-striped table-hover">
-        <thead>
-          <tr>
-            <th>Fellowship</th>
-            <th>Month</th>
-            <th>Week1</th>
-            <th>Week2</th>
-            <th>Week3</th>
-            <th>Week4</th>
-            <th>Week5</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="report in filteredReports" :key="report.id">
-            <td>{{ report.fellowship.name }}</td>
-            <td>{{ report.monthYear }}</td>
-            <td>{{ report.week1Count }}</td>
-            <td>{{ report.week2Count }}</td>
-            <td>{{ report.week3Count }}</td>
-            <td>{{ report.week4Count }}</td>
-            <td>{{ report.week5Count }}</td>
-            <td><span :class="'badge ' + (report.status === 'FINALIZED' ? 'bg-success' : 'bg-warning')">{{ report.status }}</span></td>
-            <td>
-              <button class="btn btn-sm btn-info me-1" @click="downloadPDF(report.id)">PDF</button>
-              <button class="btn btn-sm btn-secondary" @click="viewReport(report.id)">View</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped table-hover">
+          <thead>
+            <tr>
+              <th>Fellowship</th>
+              <th>Month</th>
+              <th>Week1</th>
+              <th>Week2</th>
+              <th>Week3</th>
+              <th>Week4</th>
+              <th>Week5</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="report in filteredReports" :key="report.id">
+              <td>{{ report.fellowship.name }}</td>
+              <td>{{ report.monthYear }}</td>
+              <td>{{ report.week1Count }}</td>
+              <td>{{ report.week2Count }}</td>
+              <td>{{ report.week3Count }}</td>
+              <td>{{ report.week4Count }}</td>
+              <td>{{ report.week5Count }}</td>
+              <td><span :class="'badge ' + (report.status === 'FINALIZED' ? 'bg-success' : 'bg-warning')">{{ report.status }}</span></td>
+              <td>
+                <button class="btn btn-sm btn-info me-1" @click="downloadPDF(report.id)">PDF</button>
+                <button class="btn btn-sm btn-secondary" @click="viewReport(report.id)">View</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
@@ -110,10 +112,8 @@ const filteredReports = computed(() => {
 const fetchData = async () => {
   loading.value = true;
   try {
-    // Fetch reports
     const res = await api.get(`/reports/all?monthYear=${filters.value.month}`);
     if (res.data.success) reports.value = res.data.data;
-    // Fetch fellowships for dropdown
     const fRes = await api.get('/fellowship/list');
     if (fRes.data.success) fellowships.value = fRes.data.data;
     await nextTick();
@@ -132,6 +132,10 @@ const renderChart = () => {
 
   const labels = filteredReports.value.map(r => r.fellowship.name);
   const data = filteredReports.value.map(r => r.week1Count + r.week2Count + r.week3Count + r.week4Count + r.week5Count);
+
+  // Responsive font size for small screens
+  const isSmallScreen = window.innerWidth < 576;
+  const tickFontSize = isSmallScreen ? 8 : 11;
 
   chartInstance = new Chart(ctx, {
     type: 'bar',
@@ -153,6 +157,15 @@ const renderChart = () => {
       },
       scales: {
         y: { beginAtZero: true },
+        x: {
+          ticks: {
+            maxRotation: 45,
+            minRotation: 0,
+            font: {
+              size: tickFontSize,
+            },
+          },
+        },
       },
     },
   });
@@ -167,7 +180,6 @@ const viewReport = (reportId) => {
 };
 
 const downloadAllPDFs = () => {
-  // Open each PDF in a new tab (or use a batch download)
   for (const report of filteredReports.value) {
     window.open(`/api/reports/${report.id}/pdf`, '_blank');
   }
@@ -198,7 +210,6 @@ const exportCSV = () => {
   URL.revokeObjectURL(link.href);
 };
 
-// Chart.js CDN load
 const loadChart = () => {
   return new Promise((resolve) => {
     if (typeof Chart !== 'undefined') {

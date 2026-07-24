@@ -59,17 +59,17 @@
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Location</th>
-                  <th>Leader</th>
+                  <th class="d-none d-md-table-cell">Location</th>
+                  <th class="d-none d-md-table-cell">Leader</th>
                   <th>Members</th>
-                  <th>Actions</th>
+                  <th class="d-none d-sm-table-cell">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="f in fellowshipsList" :key="f.id">
                   <td>{{ f.name }}</td>
-                  <td>{{ f.location }}</td>
-                  <td>{{ f.leader?.fullName || '—' }}</td>
+                  <td class="d-none d-md-table-cell">{{ f.location }}</td>
+                  <td class="d-none d-md-table-cell">{{ f.leader?.fullName || '—' }}</td>
                   <td>
                     <span
                       class="member-count-link"
@@ -79,7 +79,7 @@
                       {{ f._count.members }}
                     </span>
                   </td>
-                  <td>
+                  <td class="d-none d-sm-table-cell">
                     <button class="btn btn-sm btn-warning me-1" @click="openEditFellowship(f)">✏️</button>
                     <button
                       class="btn btn-sm btn-danger"

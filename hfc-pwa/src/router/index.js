@@ -59,50 +59,39 @@ const router = createRouter({
       component: () => import('../views/AdminView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     },
-    {
-      path: '/members',
-      name: 'Members',
-      component: () => import('../views/MembersView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true },
-    },
+    // ❌ Removed '/members' route – no longer needed
     {
       path: '/admin/correction',
       name: 'AdminCorrection',
       component: () => import('../views/AdminCorrectionView.vue'),
       meta: { requiresAuth: true, requiresHOD: true },
     },
-
     {
-  path: '/admin/users',
-  name: 'AdminUsers',
-  component: () => import('../views/AdminUsersView.vue'),
-  meta: { requiresAuth: true, requiresHOD: true },
-},
+      path: '/admin/users',
+      name: 'AdminUsers',
+      component: () => import('../views/AdminUsersView.vue'),
+      meta: { requiresAuth: true, requiresHOD: true },
+    },
   ],
 });
 
 router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
 
-  // If route requires authentication, check if we need to restore session
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     const token = localStorage.getItem('jwt_token');
     if (token) {
       const restored = await authStore.restoreSession();
-      if (!restored) {
-        return '/login';
-      }
+      if (!restored) return '/login';
     } else {
       return '/login';
     }
   }
 
-  // If route requires guest (login page) and user is authenticated
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return '/dashboard';
   }
 
-  // Role-based restrictions
   if (to.meta.requiresHOD && authStore.user?.role !== 'HOD' && authStore.user?.role !== 'ADMIN') {
     return '/dashboard';
   }

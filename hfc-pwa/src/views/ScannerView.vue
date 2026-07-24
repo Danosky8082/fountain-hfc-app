@@ -118,15 +118,33 @@ const goToManual = () => {
 }
 
 const markPresent = async () => {
-  if (!scanResult.value) return
+  if (!scanResult.value) {
+    alert('No QR code scanned.');
+    return;
+  }
+
+  let memberId = scanResult.value;
+  try {
+    // If QR data is JSON (we encoded it with id, name, fellowship)
+    const parsed = JSON.parse(scanResult.value);
+    memberId = parsed.id;
+  } catch (e) {
+    // It's a plain string – use as is (fallback)
+  }
+
+  if (!memberId) {
+    alert('Invalid QR code – member ID not found.');
+    return;
+  }
+
   try {
     const response = await api.post('/attendance/mark', {
-      memberId: scanResult.value,
+      memberId: memberId,
       checkInMethod: 'QR_SCAN'
-    })
+    });
     if (response.data.success) {
-      alert('✅ Check-in successful!')
-      scanResult.value = null
+      alert('✅ Check-in successful!');
+      scanResult.value = null;
       // Restart scanner after check‑in
       if (html5QrCode && !html5QrCode.isScanning) {
         html5QrCode.start(
@@ -137,31 +155,33 @@ const markPresent = async () => {
         ).catch(() => {})
       }
     } else {
-      alert('❌ Failed: ' + response.data.message)
+      alert('❌ Failed: ' + (response.data.message || 'Check-in failed.'));
     }
   } catch (error) {
-    alert('Error marking attendance')
+    console.error('Check-in error:', error);
+    const msg = error.response?.data?.message || error.message || 'Unknown error';
+    alert('❌ Error: ' + msg);
   }
-}
+};
 
 const markManualPresent = async () => {
   if (!manualMemberId.value) {
-    alert('Please enter a Member ID.')
-    return
+    alert('Please enter a Member ID.');
+    return;
   }
   try {
     const response = await api.post('/attendance/mark', {
       memberId: manualMemberId.value.trim(),
       checkInMethod: 'MANUAL'
-    })
+    });
     if (response.data.success) {
-      alert('✅ Check-in successful!')
-      manualMemberId.value = ''
+      alert('✅ Check-in successful!');
+      manualMemberId.value = '';
     } else {
-      alert('❌ Failed: ' + response.data.message)
+      alert('❌ Failed: ' + response.data.message);
     }
   } catch (error) {
-    alert('Error marking attendance')
+    alert('Error marking attendance');
   }
 }
 </script>

@@ -1,12 +1,21 @@
 <template>
   <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
       <h4>📋 Manual Check-in</h4>
       <button class="btn btn-primary btn-sm" @click="showAddMemberModal = true">
         ➕ Add Member
       </button>
     </div>
     <p class="text-muted">Select members present (for those who lost their QR cards).</p>
+
+    <!-- Fellowship selector for Admin/HOD -->
+    <div v-if="isAdminOrHod" class="mb-3">
+      <label class="form-label">Select Fellowship</label>
+      <select v-model="selectedFellowshipId" class="form-control" @change="onFellowshipChange">
+        <option v-for="f in fellowships" :key="f.id" :value="f.id">{{ f.name }}</option>
+      </select>
+    </div>
+
     <div v-if="loading" class="text-center my-5"><LoadingSpinner /></div>
     <div v-else-if="members.length === 0" class="alert alert-info">No active members found.</div>
     <div v-else>
@@ -14,21 +23,21 @@
         <input v-model="search" type="text" class="form-control" placeholder="Search members..." />
         <span class="input-group-text"><i class="bi bi-search"></i></span>
       </div>
-      <!-- Show a warning if the week is already submitted -->
+      <!-- Warning if week submitted -->
       <div v-if="sessionSubmitted" class="alert alert-warning">
         ⚠️ The current week has already been submitted. You cannot mark additional members present.
-        <span v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD'">
+        <span v-if="isAdminOrHod">
           Use the <router-link to="/admin/correction">Correction page</router-link> to adjust attendance.
         </span>
       </div>
       <div class="list-group">
-        <div v-for="member in filteredMembers" :key="member.id" class="list-group-item d-flex justify-content-between align-items-center">
+        <div v-for="member in filteredMembers" :key="member.id" class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
           <span>{{ member.fullName }}</span>
-          <div>
+          <div class="d-flex gap-1 flex-wrap">
             <span v-if="member.isPresent" class="badge bg-success me-2">Present</span>
-            <button 
-              v-if="!member.isPresent && !sessionSubmitted" 
-              class="btn btn-sm btn-outline-primary me-1" 
+            <button
+              v-if="!member.isPresent && !sessionSubmitted"
+              class="btn btn-sm btn-outline-primary me-1"
               @click="checkIn(member.id)"
             >
               Check-in
@@ -42,7 +51,7 @@
       </div>
     </div>
 
-    <!-- Add Member Modal (unchanged) -->
+    <!-- Add Member Modal -->
     <div v-if="showAddMemberModal" class="modal-overlay" @click.self="showAddMemberModal = false">
       <div class="modal-content">
         <h5>Add New Member</h5>
@@ -51,7 +60,7 @@
           <div class="mb-2"><label class="form-label">Phone</label><input v-model="newMember.phone" type="text" class="form-control" /></div>
           <div class="mb-2"><label class="form-label">Email</label><input v-model="newMember.email" type="email" class="form-control" /></div>
           <div class="mb-2"><label class="form-label">Member Number (optional)</label><input v-model="newMember.memberNumber" type="text" class="form-control" placeholder="e.g., M001" /></div>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 flex-wrap">
             <button type="submit" class="btn btn-success" :disabled="addingMember"><span v-if="addingMember" class="spinner-border spinner-border-sm me-2"></span>Add Member</button>
             <button type="button" class="btn btn-secondary" @click="showAddMemberModal = false">Cancel</button>
           </div>
@@ -63,7 +72,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import api from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import LoadingSpinner from '../components/LoadingSpinner.vue';
@@ -72,7 +81,12 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
 const search = ref('');
-const sessionSubmitted = ref(false); // ✅ Track whether the current week is submitted
+const sessionSubmitted = ref(false);
+
+// Fellowship selector (for Admin/HOD)
+const fellowships = ref([]);
+const selectedFellowshipId = ref(null);
+const isAdminOrHod = computed(() => authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD');
 
 // Modal state
 const showAddMemberModal = ref(false);
@@ -86,12 +100,43 @@ const filteredMembers = computed(() => {
   return members.value.filter(m => m.fullName.toLowerCase().includes(search.value.toLowerCase()));
 });
 
-const fetchMembers = async () => {
+// ─── Fetch fellowships (for Admin/HOD) ──────────────────────────
+const fetchFellowships = async () => {
   try {
-    const response = await api.get('/fellowship/members');
+    const res = await api.get('/fellowship/list');
+    if (res.data.success) {
+      fellowships.value = res.data.data;
+      // Auto-select the first one if user is Admin/HOD and no selection yet
+      if (isAdminOrHod.value && !selectedFellowshipId.value && fellowships.value.length > 0) {
+        selectedFellowshipId.value = fellowships.value[0].id;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch fellowships', error);
+  }
+};
+
+// ─── Fetch members ──────────────────────────────────────────────
+const fetchMembers = async () => {
+  // If Admin/HOD and no fellowship selected, don't fetch
+  if (isAdminOrHod.value && !selectedFellowshipId.value) {
+    loading.value = false;
+    return;
+  }
+
+  let fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
+  if (!fellowshipId) {
+    loading.value = false;
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const url = `/fellowship/members?fellowshipId=${fellowshipId}`;
+    const response = await api.get(url);
     if (response.data.success) {
       members.value = response.data.data.map(m => ({ ...m, isPresent: false }));
-      await fetchAttendance();
+      await fetchAttendance(fellowshipId);
     }
   } catch (error) {
     console.error(error);
@@ -100,31 +145,31 @@ const fetchMembers = async () => {
   }
 };
 
-const fetchAttendance = async () => {
+const fetchAttendance = async (fellowshipId) => {
   try {
-    const res = await api.get('/attendance/current-session');
+    const url = `/attendance/current-session?fellowshipId=${fellowshipId}`;
+    const res = await api.get(url);
     if (res.data.success) {
       const sessionMembers = res.data.data.members;
+      sessionSubmitted.value = res.data.data.session.isSubmitted;
       members.value = members.value.map(m => {
         const found = sessionMembers.find(sm => sm.id === m.id);
         return { ...m, isPresent: found?.isPresent || false };
       });
-      // ✅ Store the submission status
-      sessionSubmitted.value = res.data.data.session.isSubmitted;
     }
   } catch (error) {
     console.error('Failed to fetch attendance', error);
   }
 };
 
+// ─── Check-in ──────────────────────────────────────────────────
 const checkIn = async (memberId) => {
-  // ✅ Prevent check‑in if the week is already submitted
   if (sessionSubmitted.value) {
     alert('⚠️ The current week has already been submitted. You cannot add more check‑ins.');
     return;
   }
-
   try {
+    const fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
     const res = await api.post('/attendance/mark', { memberId, checkInMethod: 'MANUAL' });
     if (res.data.success) {
       const member = members.value.find(m => m.id === memberId);
@@ -138,7 +183,7 @@ const checkIn = async (memberId) => {
   }
 };
 
-// ✅ QR code – exactly the same as Members page
+// ─── QR code ──────────────────────────────────────────────────
 const showQR = (memberId) => {
   const token = authStore.token;
   if (!token) {
@@ -149,13 +194,18 @@ const showQR = (memberId) => {
   window.open(`${baseUrl}/api/qr/member/${memberId}?token=${token}`, '_blank');
 };
 
+// ─── Add Member ──────────────────────────────────────────────────
 const addMember = async () => {
   addingMember.value = true;
   memberAddMessage.value = '';
   try {
+    const fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
+    if (!fellowshipId) {
+      throw new Error('No fellowship selected.');
+    }
     const res = await api.post('/members', {
       ...newMember.value,
-      fellowshipId: authStore.fellowship.id,
+      fellowshipId,
     });
     if (res.data.success) {
       memberAddMessage.value = `✅ "${res.data.data.fullName}" added!`;
@@ -178,8 +228,28 @@ const addMember = async () => {
   }
 };
 
-onMounted(() => {
-  fetchMembers();
+// ─── Watch for fellowship change ──────────────────────────────
+const onFellowshipChange = () => {
+  if (selectedFellowshipId.value) {
+    fetchMembers();
+  }
+};
+
+onMounted(async () => {
+  if (isAdminOrHod.value) {
+    await fetchFellowships();
+  } else {
+    // For FL/Associate, just use their own fellowship
+    selectedFellowshipId.value = authStore.fellowship?.id;
+    await fetchMembers();
+  }
+});
+
+// Watch selectedFellowshipId for changes (if Admin/HOD)
+watch(selectedFellowshipId, (newVal) => {
+  if (isAdminOrHod.value && newVal) {
+    fetchMembers();
+  }
 });
 </script>
 

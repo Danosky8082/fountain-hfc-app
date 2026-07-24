@@ -1,6 +1,7 @@
+// src/controllers/attendanceController.js
 const prisma = require('../prisma');
 
-// ─── Helper: Get current week number (1‑5) ─────────────────────
+// Helper: get current week number
 const getCurrentWeek = (date) => {
   const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
   const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfMonth.getDay()) % 7;
@@ -8,7 +9,7 @@ const getCurrentWeek = (date) => {
   return Math.min(Math.max(week, 1), 5);
 };
 
-// ─── Helper: Create a submitted session for a given week ──────
+// Helper: create a submitted session
 const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
   return prisma.attendanceSession.create({
     data: {
@@ -18,7 +19,7 @@ const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meeti
       meetingDate: meetingDate || new Date(),
       isSubmitted: true,
       submittedAt: new Date(),
-      submittedBy: null, // system
+      submittedBy: null,
     },
   });
 };
@@ -27,25 +28,49 @@ const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meeti
  * GET /api/attendance/current-session
  * Gets the current week's session for the FL's fellowship.
  * If it doesn't exist, it creates it automatically.
+ * For Admin/HOD, accepts ?fellowshipId= param to select a fellowship.
  */
 exports.getOrCreateCurrentSession = async (req, res) => {
   try {
-    const { fellowshipId, userId } = req.user;
+    const { fellowshipId: userFellowshipId, userId, role } = req.user;
+    let targetFellowshipId = userFellowshipId;
+
+    if ((role === 'ADMIN' || role === 'HOD') && req.query.fellowshipId) {
+      targetFellowshipId = req.query.fellowshipId;
+    }
+
+    if (!targetFellowshipId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fellowship selected. Please choose a fellowship.',
+      });
+    }
+
+    // For non-Admin/HOD, verify they have access
+    if (role !== 'ADMIN' && role !== 'HOD') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { leading: { select: { id: true } }, assisting: { select: { id: true } } },
+      });
+      const allowedFellowshipIds = [user?.leading?.id, user?.assisting?.id].filter(Boolean);
+      if (!allowedFellowshipIds.includes(targetFellowshipId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not authorized to view attendance for this fellowship.',
+        });
+      }
+    }
+
     const now = new Date();
     const monthYear = now.toISOString().slice(0, 7);
-
-    // Calculate week number (1-5) based on which Sunday of the month it is
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfMonth.getDay()) % 7;
-    const weekNumber = Math.ceil((now.getDate() - firstSunday + 1) / 7);
-    const clampedWeekNumber = Math.min(Math.max(weekNumber, 1), 5);
+    const currentWeek = getCurrentWeek(now);
 
     // Try to find existing session for this week
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
-          fellowshipId,
-          weekNumber: clampedWeekNumber,
+          fellowshipId: targetFellowshipId,
+          weekNumber: currentWeek,
           monthYear,
         },
       },
@@ -56,12 +81,11 @@ exports.getOrCreateCurrentSession = async (req, res) => {
       },
     });
 
-    // If no session exists, create one
     if (!session) {
       session = await prisma.attendanceSession.create({
         data: {
-          fellowshipId,
-          weekNumber: clampedWeekNumber,
+          fellowshipId: targetFellowshipId,
+          weekNumber: currentWeek,
           monthYear,
           meetingDate: now,
         },
@@ -75,11 +99,11 @@ exports.getOrCreateCurrentSession = async (req, res) => {
 
     // Get all active members of this fellowship
     const allMembers = await prisma.member.findMany({
-      where: { fellowshipId, isActive: true },
+      where: { fellowshipId: targetFellowshipId, isActive: true },
       orderBy: { fullName: 'asc' },
     });
 
-    // Map attendance status for each member
+    // Map attendance status
     const memberStatus = allMembers.map((member) => {
       const record = session.records.find((r) => r.memberId === member.id);
       return {

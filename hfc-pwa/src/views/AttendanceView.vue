@@ -1,6 +1,15 @@
 <template>
   <div class="container mt-4">
     <h4>📊 Current Week Attendance</h4>
+
+    <!-- Fellowship selector for Admin/HOD -->
+    <div v-if="isAdminOrHod" class="mb-3">
+      <label class="form-label">Select Fellowship</label>
+      <select v-model="selectedFellowshipId" class="form-control" @change="onFellowshipChange">
+        <option v-for="f in fellowships" :key="f.id" :value="f.id">{{ f.name }}</option>
+      </select>
+    </div>
+
     <div v-if="loading" class="text-center"><LoadingSpinner /></div>
     <div v-else-if="session">
       <div class="card mb-3">
@@ -79,15 +88,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import api from '../services/api'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
+import { ref, onMounted, watch, computed } from 'vue';
+import api from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner.vue';
+import { useAuthStore } from '../stores/auth';
 
-const loading = ref(true)
-const session = ref(null)
-const members = ref([])
-const submitting = ref(false)
-const showReportModal = ref(false)
+const authStore = useAuthStore();
+const loading = ref(true);
+const session = ref(null);
+const members = ref([]);
+const submitting = ref(false);
+const showReportModal = ref(false);
+
+// Fellowship selector (for Admin/HOD)
+const fellowships = ref([]);
+const selectedFellowshipId = ref(null);
+const isAdminOrHod = computed(() => authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD');
 
 const reportQuestions = ref({
   prayerFlag: false,
@@ -96,24 +112,52 @@ const reportQuestions = ref({
   followUps: 0,
   escalations: '',
   comments: '',
-})
+});
 
-const fetchData = async () => {
+// ─── Fetch fellowships (for Admin/HOD) ──────────────────────────
+const fetchFellowships = async () => {
   try {
-    const res = await api.get('/attendance/current-session')
+    const res = await api.get('/fellowship/list');
     if (res.data.success) {
-      session.value = res.data.data.session
-      members.value = res.data.data.members || []
+      fellowships.value = res.data.data;
+      if (isAdminOrHod.value && !selectedFellowshipId.value && fellowships.value.length > 0) {
+        selectedFellowshipId.value = fellowships.value[0].id;
+      }
     }
   } catch (error) {
-    console.error(error)
-  } finally {
-    loading.value = false
+    console.error('Failed to fetch fellowships', error);
   }
-}
+};
 
+// ─── Fetch data ──────────────────────────────────────────────────
+const fetchData = async () => {
+  if (isAdminOrHod.value && !selectedFellowshipId.value) {
+    loading.value = false;
+    return;
+  }
+
+  let fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
+  if (!fellowshipId) {
+    loading.value = false;
+    return;
+  }
+
+  try {
+    const res = await api.get(`/attendance/current-session?fellowshipId=${fellowshipId}`);
+    if (res.data.success) {
+      session.value = res.data.data.session;
+      members.value = res.data.data.members || [];
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// ─── Open modal ──────────────────────────────────────────────────
 const openReportModal = () => {
-  if (submitting.value) return
+  if (submitting.value) return;
   reportQuestions.value = {
     prayerFlag: false,
     firstTimers: 0,
@@ -121,61 +165,57 @@ const openReportModal = () => {
     followUps: 0,
     escalations: '',
     comments: '',
-  }
-  showReportModal.value = true
-}
+  };
+  showReportModal.value = true;
+};
 
-// ─── Corrected submit logic ────────────────────────────────────
+// ─── Submit week with report ────────────────────────────────────
 const submitWeekWithReport = async () => {
-  submitting.value = true
+  submitting.value = true;
   try {
-    // 1. Attempt to submit the week
-    let weekRes
+    let weekRes;
     try {
-      weekRes = await api.post('/attendance/submit-week', {})
+      weekRes = await api.post('/attendance/submit-week', {});
     } catch (error) {
-      // If the error is a 400 with missingWeeks data, handle it
       if (error.response && error.response.status === 400 && error.response.data.missingWeeks && error.response.data.canForce) {
-        weekRes = error.response.data
+        weekRes = error.response.data;
       } else {
-        throw error
+        throw error;
       }
     }
 
-    // 2. Check if we have missing weeks
     if (weekRes.missingWeeks && weekRes.canForce) {
-      const weekList = weekRes.missingWeeks.join(', ')
+      const weekList = weekRes.missingWeeks.join(', ');
       const userConfirmed = confirm(
         `⚠️ You are missing submissions for Week(s) ${weekList}.\n\n` +
         `Do you want to continue submitting Week ${session.value.weekNumber}?\n` +
         `Missing weeks will be marked with zero attendance.`
-      )
+      );
       if (userConfirmed) {
-        const forceRes = await api.post('/attendance/submit-week', { force: true })
+        const forceRes = await api.post('/attendance/submit-week', { force: true });
         if (forceRes.data.success) {
-          weekRes = forceRes.data
+          weekRes = forceRes.data;
         } else {
-          alert('❌ ' + forceRes.data.message)
-          submitting.value = false
-          return
+          alert('❌ ' + forceRes.data.message);
+          submitting.value = false;
+          return;
         }
       } else {
-        submitting.value = false
-        return
+        submitting.value = false;
+        return;
       }
     }
 
-    // 3. Check if submission succeeded
     if (!weekRes.success) {
-      alert('❌ ' + weekRes.message)
-      submitting.value = false
-      return
+      alert('❌ ' + weekRes.message);
+      submitting.value = false;
+      return;
     }
 
-    // 4. Save report questions
-    const reportRes = await api.get('/reports/current')
+    // Save report questions
+    const reportRes = await api.get('/reports/current');
     if (reportRes.data.success) {
-      const reportId = reportRes.data.data.id
+      const reportId = reportRes.data.data.id;
       await api.put(`/reports/${reportId}`, {
         prayerFlag: reportQuestions.value.prayerFlag,
         firstTimers: reportQuestions.value.firstTimers,
@@ -184,22 +224,42 @@ const submitWeekWithReport = async () => {
         escalations: reportQuestions.value.escalations,
         comments: reportQuestions.value.comments,
         action: 'SAVE',
-      })
+      });
     }
 
-    alert('✅ Week submitted with report data!')
-    showReportModal.value = false
-    await fetchData()
+    alert('✅ Week submitted with report data!');
+    showReportModal.value = false;
+    await fetchData();
   } catch (error) {
-    console.error('Error submitting week:', error)
-    const errMsg = error.response?.data?.message || error.message
-    alert('❌ Error: ' + errMsg)
+    console.error('Error submitting week:', error);
+    const errMsg = error.response?.data?.message || error.message;
+    alert('❌ Error: ' + errMsg);
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
-onMounted(fetchData)
+// ─── Watch for fellowship change ──────────────────────────────
+const onFellowshipChange = () => {
+  if (selectedFellowshipId.value) {
+    fetchData();
+  }
+};
+
+onMounted(async () => {
+  if (isAdminOrHod.value) {
+    await fetchFellowships();
+  } else {
+    selectedFellowshipId.value = authStore.fellowship?.id;
+    await fetchData();
+  }
+});
+
+watch(selectedFellowshipId, (newVal) => {
+  if (isAdminOrHod.value && newVal) {
+    fetchData();
+  }
+});
 </script>
 
 <style scoped>

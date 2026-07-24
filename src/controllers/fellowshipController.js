@@ -5,56 +5,47 @@ exports.getMembers = async (req, res) => {
     const { fellowshipId, userId, role } = req.user;
 
     // Fetch the user with their fellowship relations
+    // src/controllers/fellowshipController.js
+exports.getMembers = async (req, res) => {
+  try {
+    const { fellowshipId: userFellowshipId, userId, role } = req.user;
+    let targetFellowshipId = userFellowshipId;
+
+    // If user is ADMIN or HOD, and a fellowshipId is provided in query, use that
+    if ((role === 'ADMIN' || role === 'HOD') && req.query.fellowshipId) {
+      targetFellowshipId = req.query.fellowshipId;
+    }
+
+    if (!targetFellowshipId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fellowship selected. Please choose a fellowship.',
+      });
+    }
+
+    // Verify the user has access (if not Admin/HOD, enforce their own fellowship)
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        leading: { select: { id: true } },
-        assisting: { select: { id: true } },
-        role: true,
-      },
+      select: { leading: { select: { id: true } }, assisting: { select: { id: true } } },
     });
-
-    const isAuthorized =
-      user?.leading?.id === fellowshipId ||
-      user?.assisting?.id === fellowshipId ||
-      role === 'HOD' ||
-      role === 'ADMIN';
-
-    if (!isAuthorized) {
+    const allowedFellowshipIds = [user?.leading?.id, user?.assisting?.id].filter(Boolean);
+    if (role !== 'ADMIN' && role !== 'HOD' && !allowedFellowshipIds.includes(targetFellowshipId)) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to view members of this fellowship.',
       });
     }
 
-    // Now fetch members
     const members = await prisma.member.findMany({
-      where: {
-        fellowshipId: fellowshipId,
-        isActive: true,
-      },
+      where: { fellowshipId: targetFellowshipId, isActive: true },
       orderBy: { fullName: 'asc' },
-      select: {
-        id: true,
-        fullName: true,
-        phone: true,
-        email: true,
-        qrUniqueId: true,
-        createdAt: true,
-      },
+      select: { id: true, fullName: true, phone: true, email: true, qrUniqueId: true, memberNumber: true },
     });
 
-    res.status(200).json({
-      success: true,
-      count: members.length,
-      data: members,
-    });
+    res.status(200).json({ success: true, data: members });
   } catch (error) {
     console.error('Get Members Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch fellowship members. Please try again later.',
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch members.' });
   }
 };
 

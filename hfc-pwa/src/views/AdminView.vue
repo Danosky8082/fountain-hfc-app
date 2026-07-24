@@ -173,6 +173,30 @@
       </div>
     </div>
 
+    <!-- === Batch QR Generation === -->
+    <div class="card mb-4">
+      <div class="card-header bg-secondary text-white">📥 Batch QR Codes</div>
+      <div class="card-body">
+        <p class="text-muted">Download QR codes for all active members as a ZIP file.</p>
+        <div class="row">
+          <div class="col-md-4 mb-2">
+            <label class="form-label">Filter by Fellowship (optional)</label>
+            <select v-model="batchFellowshipId" class="form-control">
+              <option value="">All Fellowships</option>
+              <option v-for="f in fellowships" :key="f.id" :value="f.id">{{ f.name }}</option>
+            </select>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-secondary w-100" @click="downloadBatchQR" :disabled="batchLoading">
+              <span v-if="batchLoading" class="spinner-border spinner-border-sm me-2"></span>
+              Download ZIP
+            </button>
+          </div>
+        </div>
+        <div v-if="batchMessage" class="mt-2" :class="batchMessageClass">{{ batchMessage }}</div>
+      </div>
+    </div>
+
     <!-- === Edit Fellowship Modal === -->
     <div v-if="showEditFellowshipModal" class="modal-overlay" @click.self="closeEditFellowship">
       <div class="modal-content">
@@ -248,6 +272,12 @@ const editFellowship = ref({ id: '', name: '', location: '', leaderId: '', assoc
 const savingEditFellowship = ref(false);
 const editFellowshipMessage = ref('');
 const editFellowshipMessageClass = ref('text-success');
+
+// ---- Batch QR ----
+const batchFellowshipId = ref('');
+const batchLoading = ref(false);
+const batchMessage = ref('');
+const batchMessageClass = ref('text-success');
 
 // ─── Fetch fellowships (for dropdown) ──────────────────────────
 const fetchFellowships = async () => {
@@ -405,6 +435,38 @@ const deleteFellowship = async (id) => {
     }
   } catch (error) {
     alert('❌ Error: ' + (error.response?.data?.message || error.message));
+  }
+};
+
+// ─── Download Batch QR ──────────────────────────────────────────
+const downloadBatchQR = async () => {
+  batchLoading.value = true;
+  batchMessage.value = '';
+  try {
+    const params = new URLSearchParams();
+    if (batchFellowshipId.value) params.append('fellowshipId', batchFellowshipId.value);
+    const url = `/api/admin/qr/batch?${params.toString()}`;
+
+    const response = await api.get(url, {
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], { type: 'application/zip' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'member_qr_codes.zip';
+    link.click();
+    URL.revokeObjectURL(link.href);
+
+    batchMessage.value = '✅ QR codes downloaded successfully!';
+    batchMessageClass.value = 'text-success';
+  } catch (error) {
+    console.error('Batch QR error:', error);
+    const msg = error.response?.data?.message || error.message || 'Failed to download.';
+    batchMessage.value = '❌ ' + msg;
+    batchMessageClass.value = 'text-danger';
+  } finally {
+    batchLoading.value = false;
   }
 };
 

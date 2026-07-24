@@ -1,4 +1,3 @@
-// src/controllers/qrController.js
 const QRCode = require('qrcode');
 const sharp = require('sharp');
 const path = require('path');
@@ -7,7 +6,7 @@ const archiver = require('archiver');
 const prisma = require('../prisma');
 const jwt = require('jsonwebtoken');
 
-// ─── Single QR (existing) ──────────────────────────────────────
+// ─── Single QR ──────────────────────────────────────────────────────
 exports.generateMemberQR = async (req, res) => {
   try {
     const { memberId } = req.params;
@@ -68,7 +67,7 @@ exports.generateMemberQR = async (req, res) => {
   }
 };
 
-// ─── Batch QR (new) ────────────────────────────────────────────
+// ─── Batch QR ──────────────────────────────────────────────────────
 exports.generateBatchQR = async (req, res) => {
   try {
     const token = req.query.token || req.headers.authorization?.split(' ')[1];

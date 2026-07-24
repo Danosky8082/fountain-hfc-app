@@ -445,7 +445,8 @@ const downloadBatchQR = async () => {
   try {
     const params = new URLSearchParams();
     if (batchFellowshipId.value) params.append('fellowshipId', batchFellowshipId.value);
-    const url = `/api/admin/qr/batch?${params.toString()}`;
+    // ✅ Correct URL – no duplicate /api
+    const url = `/admin/qr/batch?${params.toString()}`;
 
     const response = await api.get(url, {
       responseType: 'blob',

@@ -1,107 +1,9 @@
 const prisma = require('../prisma');
 const bcrypt = require('bcryptjs');
-const { refreshReportCounts } = require('../utils/reportUtils');
+const { refreshReportCounts } = require('../utils/reportUtils'); // optional, if exists
 
-// ---- Create Fellowship ----
-exports.createFellowship = async (req, res) => {
-  try {
-    const { name, location, leaderId, associateId } = req.body;
+// ─── Users ───────────────────────────────────────────────────────────────
 
-    if (leaderId) {
-      const existingLeader = await prisma.fellowship.findFirst({
-        where: { leaderId: leaderId },
-      });
-      if (existingLeader) {
-        return res.status(400).json({
-          success: false,
-          message: 'This user is already the leader of another fellowship.',
-        });
-      }
-    }
-    if (associateId) {
-      const existingAssociate = await prisma.fellowship.findFirst({
-        where: { associateId: associateId },
-      });
-      if (existingAssociate) {
-        return res.status(400).json({
-          success: false,
-          message: 'This user is already the associate leader of another fellowship.',
-        });
-      }
-    }
-
-    const fellowship = await prisma.fellowship.create({
-      data: {
-        name,
-        location,
-        leaderId: leaderId || null,
-        associateId: associateId || null,
-      },
-    });
-
-    res.status(201).json({ success: true, data: fellowship });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(400).json({
-        success: false,
-        message: 'This user is already assigned as leader or associate of another fellowship.',
-      });
-    }
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// ---- Create Member ----
-exports.createMember = async (req, res) => {
-  try {
-    const { fullName, phone, email, fellowshipId, memberNumber } = req.body;
-    const qrUniqueId = `MEMBER-${Date.now()}`;
-    const member = await prisma.member.create({
-      data: {
-        fullName,
-        phone: phone || null,
-        email: email || null,
-        fellowshipId,
-        qrUniqueId,
-        memberNumber: memberNumber || null,
-      },
-    });
-    res.status(201).json({ success: true, data: member });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(400).json({
-        success: false,
-        message: 'The member number or QR ID is already taken.',
-      });
-    }
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// ---- Create System User ----
-exports.createUser = async (req, res) => {
-  try {
-    const { churchId, email, fullName, password, role } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        churchId,
-        email,
-        fullName,
-        passwordHash: hashedPassword,
-        role,
-      },
-    });
-    res.status(201).json({
-      success: true,
-      data: { id: user.id, churchId: user.churchId, role: user.role },
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// ---- Get Users by Role (for dropdowns) ----
 exports.getUsersByRole = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -122,78 +24,87 @@ exports.getUsersByRole = async (req, res) => {
   }
 };
 
-// ─── Get all members (only active) ────────────────────────────
-exports.getAllMembers = async (req, res) => {
+exports.createUser = async (req, res) => {
   try {
-    const members = await prisma.member.findMany({
-      where: { isActive: true }, // Only active members
-      include: { fellowship: true },
-      orderBy: { fullName: 'asc' },
-    });
-    res.status(200).json({ success: true, data: members });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// ─── Update Member ──────────────────────────────────────────────
-exports.updateMember = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { fullName, phone, email, memberNumber, fellowshipId } = req.body;
-
-    // Check if member exists
-    const existing = await prisma.member.findUnique({ where: { id } });
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Member not found.' });
+    const { churchId, email, fullName, password, role } = req.body;
+    if (!churchId || !email || !fullName || !password || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required.',
+      });
     }
-
-    // Update
-    const updated = await prisma.member.update({
-      where: { id },
-      data: {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.upsert({
+      where: { churchId },
+      update: {
+        email,
         fullName,
-        phone: phone || null,
-        email: email || null,
-        memberNumber: memberNumber || null,
-        fellowshipId,
+        passwordHash: hashedPassword,
+        role,
+      },
+      create: {
+        churchId,
+        email,
+        fullName,
+        passwordHash: hashedPassword,
+        role,
       },
     });
-
-    res.status(200).json({ success: true, data: updated });
+    res.status(201).json({
+      success: true,
+      message: `User ${user.churchId} saved.`,
+      data: { id: user.id, churchId: user.churchId, role: user.role },
+    });
   } catch (error) {
-    console.error('Update member error:', error);
+    console.error('Create user error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ─── Delete Member (soft delete) ──────────────────────────────
-exports.deleteMember = async (req, res) => {
+exports.updateUserRole = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const existing = await prisma.member.findUnique({ where: { id } });
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Member not found.' });
+    const { role } = req.body;
+    if (!role || !['FL', 'ASSOCIATE', 'HOD', 'ADMIN'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role.' });
     }
-
-    // Soft delete: set isActive to false
-    const updated = await prisma.member.update({
+    const user = await prisma.user.update({
       where: { id },
-      data: { isActive: false },
+      data: { role },
+      select: { id: true, churchId: true, fullName: true, role: true },
     });
-
-    res.status(200).json({
-      success: true,
-      message: 'Member deactivated successfully.',
-      data: updated,
-    });
+    res.status(200).json({ success: true, data: user });
   } catch (error) {
-    console.error('Delete member error:', error);
+    console.error('Update user role error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
-// ─── Get all fellowships (for admin list) ──────────────────────
+
+// ─── Fellowships ───────────────────────────────────────────────────────
+
+exports.createFellowship = async (req, res) => {
+  try {
+    const { name, location, leaderId, associateId } = req.body;
+    if (!name || !location) {
+      return res.status(400).json({ success: false, message: 'Name and location are required.' });
+    }
+    // Check if leaderId already used
+    if (leaderId) {
+      const existing = await prisma.fellowship.findFirst({ where: { leaderId } });
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'This user is already a leader.' });
+      }
+    }
+    const fellowship = await prisma.fellowship.create({
+      data: { name, location, leaderId, associateId },
+    });
+    res.status(201).json({ success: true, data: fellowship });
+  } catch (error) {
+    console.error('Create fellowship error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.getAllFellowships = async (req, res) => {
   try {
     const fellowships = await prisma.fellowship.findMany({
@@ -210,22 +121,18 @@ exports.getAllFellowships = async (req, res) => {
   }
 };
 
-// ─── Update Fellowship ──────────────────────────────────────────
 exports.updateFellowship = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, location, leaderId, associateId } = req.body;
-
     if (!name || !location) {
       return res.status(400).json({ success: false, message: 'Name and location are required.' });
     }
-
     const updated = await prisma.fellowship.update({
       where: { id },
       data: { name, location, leaderId, associateId },
       include: { leader: true, associate: true },
     });
-
     res.status(200).json({ success: true, data: updated });
   } catch (error) {
     console.error('Update fellowship error:', error);
@@ -233,65 +140,117 @@ exports.updateFellowship = async (req, res) => {
   }
 };
 
-// ─── Delete Fellowship (cascade) ──────────────────────────────
 exports.deleteFellowship = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // 1. Check if fellowship exists
-    const fellowship = await prisma.fellowship.findUnique({
-      where: { id },
-    });
-    if (!fellowship) {
-      return res.status(404).json({ success: false, message: 'Fellowship not found.' });
-    }
-
-    // 2. Delete all related data in the correct order (to avoid FK errors)
-
-    // a. Delete MonthlyReports
+    // Cascade delete
     await prisma.monthlyReport.deleteMany({ where: { fellowshipId: id } });
-
-    // b. Delete AttendanceRecords (via AttendanceSessions)
     const sessions = await prisma.attendanceSession.findMany({
       where: { fellowshipId: id },
       select: { id: true },
     });
-    for (const session of sessions) {
-      await prisma.attendanceRecord.deleteMany({ where: { sessionId: session.id } });
+    for (const s of sessions) {
+      await prisma.attendanceRecord.deleteMany({ where: { sessionId: s.id } });
     }
     await prisma.attendanceSession.deleteMany({ where: { fellowshipId: id } });
-
-    // c. Delete Members (they may have attendance records – already deleted)
     await prisma.member.deleteMany({ where: { fellowshipId: id } });
-
-    // 3. Finally delete the fellowship itself
     await prisma.fellowship.delete({ where: { id } });
-
-    res.status(200).json({
-      success: true,
-      message: 'Fellowship and all associated data deleted successfully.',
-    });
+    res.status(200).json({ success: true, message: 'Fellowship deleted.' });
   } catch (error) {
     console.error('Delete fellowship error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ─── Correct past attendance ────────────────────────────────────
-// ─── Correct Attendance ─────────────────────────────────────────
+// ─── Members ──────────────────────────────────────────────────────────
+
+exports.createMember = async (req, res) => {
+  try {
+    const { fullName, phone, email, fellowshipId, memberNumber } = req.body;
+    if (!fullName || !fellowshipId) {
+      return res.status(400).json({ success: false, message: 'Full name and fellowship are required.' });
+    }
+    const qrUniqueId = `MEMBER-${Date.now()}`;
+    const member = await prisma.member.create({
+      data: {
+        fullName,
+        phone: phone || null,
+        email: email || null,
+        fellowshipId,
+        qrUniqueId,
+        memberNumber: memberNumber || null,
+      },
+    });
+    res.status(201).json({ success: true, data: member });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, message: 'Member number or QR ID already taken.' });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getAllMembers = async (req, res) => {
+  try {
+    const members = await prisma.member.findMany({
+      where: { isActive: true },
+      include: { fellowship: true },
+      orderBy: { fullName: 'asc' },
+    });
+    res.status(200).json({ success: true, data: members });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.updateMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fullName, phone, email, memberNumber, fellowshipId } = req.body;
+    if (!fullName || !fellowshipId) {
+      return res.status(400).json({ success: false, message: 'Full name and fellowship are required.' });
+    }
+    const updated = await prisma.member.update({
+      where: { id },
+      data: {
+        fullName,
+        phone: phone || null,
+        email: email || null,
+        memberNumber: memberNumber || null,
+        fellowshipId,
+      },
+    });
+    res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Update member error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.deleteMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Soft delete
+    await prisma.member.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    res.status(200).json({ success: true, message: 'Member deactivated.' });
+  } catch (error) {
+    console.error('Delete member error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Attendance Correction ──────────────────────────────────────────
+
 exports.correctAttendance = async (req, res) => {
   try {
     const { fellowshipId, weekNumber, monthYear, memberId, checkInMethod } = req.body;
-
-    // Validate
     if (!fellowshipId || !weekNumber || !monthYear || !memberId || !checkInMethod) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields',
-      });
+      return res.status(400).json({ success: false, message: 'Missing required fields.' });
     }
-
-    // 1. Find or create the attendance session for that week
+    // Find or create session
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
@@ -301,7 +260,6 @@ exports.correctAttendance = async (req, res) => {
         },
       },
     });
-
     if (!session) {
       session = await prisma.attendanceSession.create({
         data: {
@@ -313,8 +271,7 @@ exports.correctAttendance = async (req, res) => {
         },
       });
     }
-
-    // 2. Upsert the attendance record
+    // Upsert record
     const record = await prisma.attendanceRecord.upsert({
       where: {
         sessionId_memberId: {
@@ -334,15 +291,11 @@ exports.correctAttendance = async (req, res) => {
         checkedInBy: req.user.userId,
       },
     });
-
-    // ─── 3. Refresh the MonthlyReport counts ──────────────────
-    await refreshReportCounts(fellowshipId, monthYear);
-
-    res.status(200).json({
-      success: true,
-      message: 'Attendance corrected.',
-      data: record,
-    });
+    // Refresh report counts (if helper exists)
+    if (typeof refreshReportCounts === 'function') {
+      await refreshReportCounts(fellowshipId, monthYear);
+    }
+    res.status(200).json({ success: true, message: 'Attendance corrected.', data: record });
   } catch (error) {
     console.error('Correct attendance error:', error);
     res.status(500).json({ success: false, message: error.message });

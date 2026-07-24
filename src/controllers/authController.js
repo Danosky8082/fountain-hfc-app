@@ -101,6 +101,14 @@ exports.getMe = async (req, res) => {
 
 // ─── Request OTP ────────────────────────────────────────────────
 exports.requestOTP = async (req, res) => {
+  // ─── Debug fallback ─────────────────────────────────────────────
+console.log('🔑 Returning OTP directly (debug mode)');
+return res.status(200).json({
+  success: true,
+  message: 'OTP generated (debug)',
+  data: { userId: user.id, otp: otp },
+});
+  
   try {
     const { churchId } = req.body;
     console.log('📥 Request OTP for:', churchId);

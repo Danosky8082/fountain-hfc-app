@@ -143,7 +143,8 @@ const fetchData = async () => {
   }
 
   try {
-    const res = await api.get(`/attendance/current-session?fellowshipId=${fellowshipId}`);
+    const url = `/attendance/current-session?fellowshipId=${fellowshipId}`;
+    const res = await api.get(url);
     if (res.data.success) {
       session.value = res.data.data.session;
       members.value = res.data.data.members || [];
@@ -173,9 +174,14 @@ const openReportModal = () => {
 const submitWeekWithReport = async () => {
   submitting.value = true;
   try {
+    let fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
+    if (!fellowshipId) {
+      throw new Error('No fellowship selected.');
+    }
+
     let weekRes;
     try {
-      weekRes = await api.post('/attendance/submit-week', {});
+      weekRes = await api.post('/attendance/submit-week', { fellowshipId });
     } catch (error) {
       if (error.response && error.response.status === 400 && error.response.data.missingWeeks && error.response.data.canForce) {
         weekRes = error.response.data;
@@ -192,7 +198,7 @@ const submitWeekWithReport = async () => {
         `Missing weeks will be marked with zero attendance.`
       );
       if (userConfirmed) {
-        const forceRes = await api.post('/attendance/submit-week', { force: true });
+        const forceRes = await api.post('/attendance/submit-week', { force: true, fellowshipId });
         if (forceRes.data.success) {
           weekRes = forceRes.data;
         } else {

@@ -170,7 +170,15 @@ const checkIn = async (memberId) => {
   }
   try {
     const fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
-    const res = await api.post('/attendance/mark', { memberId, checkInMethod: 'MANUAL' });
+    if (!fellowshipId) {
+      alert('No fellowship selected.');
+      return;
+    }
+    const res = await api.post('/attendance/mark', { 
+      memberId, 
+      checkInMethod: 'MANUAL',
+      fellowshipId: fellowshipId // send for Admin/HOD
+    });
     if (res.data.success) {
       const member = members.value.find(m => m.id === memberId);
       if (member) member.isPresent = true;

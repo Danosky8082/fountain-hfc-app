@@ -2,16 +2,10 @@ const prisma = require('../prisma');
 
 exports.getMembers = async (req, res) => {
   try {
-    const { fellowshipId, userId, role } = req.user;
-
-    // Fetch the user with their fellowship relations
-    // src/controllers/fellowshipController.js
-exports.getMembers = async (req, res) => {
-  try {
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     let targetFellowshipId = userFellowshipId;
 
-    // If user is ADMIN or HOD, and a fellowshipId is provided in query, use that
+    // If user is ADMIN or HOD, allow overriding with query param
     if ((role === 'ADMIN' || role === 'HOD') && req.query.fellowshipId) {
       targetFellowshipId = req.query.fellowshipId;
     }
@@ -23,17 +17,19 @@ exports.getMembers = async (req, res) => {
       });
     }
 
-    // Verify the user has access (if not Admin/HOD, enforce their own fellowship)
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { leading: { select: { id: true } }, assisting: { select: { id: true } } },
-    });
-    const allowedFellowshipIds = [user?.leading?.id, user?.assisting?.id].filter(Boolean);
-    if (role !== 'ADMIN' && role !== 'HOD' && !allowedFellowshipIds.includes(targetFellowshipId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to view members of this fellowship.',
+    // For non-Admin/HOD, verify they have access to that fellowship
+    if (role !== 'ADMIN' && role !== 'HOD') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { leading: { select: { id: true } }, assisting: { select: { id: true } } },
       });
+      const allowedFellowshipIds = [user?.leading?.id, user?.assisting?.id].filter(Boolean);
+      if (!allowedFellowshipIds.includes(targetFellowshipId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not authorized to view members of this fellowship.',
+        });
+      }
     }
 
     const members = await prisma.member.findMany({
@@ -52,42 +48,24 @@ exports.getMembers = async (req, res) => {
 exports.getFellowshipDetails = async (req, res) => {
   try {
     const { fellowshipId } = req.user;
-
+    if (!fellowshipId) {
+      return res.status(400).json({ success: false, message: 'No fellowship assigned.' });
+    }
     const fellowship = await prisma.fellowship.findUnique({
       where: { id: fellowshipId },
-      select: {
-        id: true,
-        name: true,
-        location: true,
-        createdAt: true,
-      },
+      select: { id: true, name: true, location: true },
     });
-
-    if (!fellowship) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fellowship not found.',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: fellowship,
-    });
+    res.status(200).json({ success: true, data: fellowship });
   } catch (error) {
-    console.error('Get Fellowship Details Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch fellowship details.',
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.getAllFellowships = async (req, res) => {
   try {
     const fellowships = await prisma.fellowship.findMany({
-      orderBy: { name: 'asc' },
       select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     });
     res.status(200).json({ success: true, data: fellowships });
   } catch (error) {

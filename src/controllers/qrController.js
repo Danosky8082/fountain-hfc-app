@@ -2,7 +2,7 @@ const QRCode = require('qrcode');
 const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
-const archiver = require('archiver');
+const archiver = require('archiver'); 
 const prisma = require('../prisma');
 const jwt = require('jsonwebtoken');
 

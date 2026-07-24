@@ -54,36 +54,46 @@
         <div v-if="loadingFellowships" class="text-center"><LoadingSpinner /></div>
         <div v-else-if="fellowshipsList.length === 0" class="alert alert-info">No fellowships created yet.</div>
         <div v-else>
-          <table class="table table-striped table-hover">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Location</th>
-                <th>Leader</th>
-                <th>Members</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="f in fellowshipsList" :key="f.id">
-                <td>{{ f.name }}</td>
-                <td>{{ f.location }}</td>
-                <td>{{ f.leader?.fullName || '—' }}</td>
-                <td>{{ f._count.members }}</td>
-                <td>
-                  <button class="btn btn-sm btn-warning me-1" @click="openEditFellowship(f)">✏️</button>
-                  <button
-                    class="btn btn-sm btn-danger"
-                    @click="deleteFellowship(f.id)"
-                    :disabled="f._count.members > 0"
-                    :title="f._count.members > 0 ? 'Cannot delete: has members' : 'Delete fellowship'"
-                  >
-                    🗑️
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Location</th>
+                  <th>Leader</th>
+                  <th>Members</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in fellowshipsList" :key="f.id">
+                  <td>{{ f.name }}</td>
+                  <td>{{ f.location }}</td>
+                  <td>{{ f.leader?.fullName || '—' }}</td>
+                  <td>
+                    <span
+                      class="member-count-link"
+                      @click="openMembersModal(f)"
+                      :title="`View members of ${f.name}`"
+                    >
+                      {{ f._count.members }}
+                    </span>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm btn-warning me-1" @click="openEditFellowship(f)">✏️</button>
+                    <button
+                      class="btn btn-sm btn-danger"
+                      @click="deleteFellowship(f.id)"
+                      :disabled="f._count.members > 0"
+                      :title="f._count.members > 0 ? 'Cannot delete: has members' : 'Delete fellowship'"
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -235,6 +245,41 @@
         <div v-if="editFellowshipMessage" class="mt-2" :class="editFellowshipMessageClass">{{ editFellowshipMessage }}</div>
       </div>
     </div>
+
+    <!-- === Members of Fellowship Modal === -->
+    <div v-if="showMembersModal" class="modal-overlay" @click.self="closeMembersModal">
+      <div class="modal-content" style="max-width: 700px;">
+        <h5>Members of {{ selectedFellowshipForMembers?.name }}</h5>
+        <p class="text-muted">Total: {{ fellowshipMembersList.length }}</p>
+        <div v-if="loadingMembers" class="text-center"><LoadingSpinner /></div>
+        <div v-else-if="fellowshipMembersList.length === 0" class="alert alert-info">No members in this fellowship.</div>
+        <div v-else>
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Member #</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in fellowshipMembersList" :key="m.id">
+                  <td>{{ m.fullName }}</td>
+                  <td>{{ m.phone || '—' }}</td>
+                  <td>{{ m.email || '—' }}</td>
+                  <td>{{ m.memberNumber || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+          <button class="btn btn-secondary" @click="closeMembersModal">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -279,6 +324,12 @@ const batchLoading = ref(false);
 const batchMessage = ref('');
 const batchMessageClass = ref('text-success');
 
+// ---- Members Modal ----
+const showMembersModal = ref(false);
+const selectedFellowshipForMembers = ref(null);
+const fellowshipMembersList = ref([]);
+const loadingMembers = ref(false);
+
 // ─── Fetch fellowships (for dropdown) ──────────────────────────
 const fetchFellowships = async () => {
   try {
@@ -310,6 +361,33 @@ const fetchFellowshipsList = async () => {
   } finally {
     loadingFellowships.value = false;
   }
+};
+
+// ─── Open Members Modal ─────────────────────────────────────────
+const openMembersModal = async (fellowship) => {
+  selectedFellowshipForMembers.value = fellowship;
+  loadingMembers.value = true;
+  showMembersModal.value = true;
+  try {
+    // Fetch all members and filter by this fellowship
+    const res = await api.get('/admin/members');
+    if (res.data.success) {
+      fellowshipMembersList.value = res.data.data.filter(
+        m => m.fellowshipId === fellowship.id
+      );
+    }
+  } catch (error) {
+    console.error('Failed to fetch members:', error);
+    fellowshipMembersList.value = [];
+  } finally {
+    loadingMembers.value = false;
+  }
+};
+
+const closeMembersModal = () => {
+  showMembersModal.value = false;
+  selectedFellowshipForMembers.value = null;
+  fellowshipMembersList.value = [];
 };
 
 // ─── Create Fellowship ──────────────────────────────────────────
@@ -445,7 +523,6 @@ const downloadBatchQR = async () => {
   try {
     const params = new URLSearchParams();
     if (batchFellowshipId.value) params.append('fellowshipId', batchFellowshipId.value);
-    // ✅ Correct URL – no duplicate /api
     const url = `/admin/qr/batch?${params.toString()}`;
 
     const response = await api.get(url, {
@@ -479,6 +556,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.member-count-link {
+  cursor: pointer;
+  color: #0d6efd;
+  text-decoration: underline;
+  font-weight: bold;
+}
+.member-count-link:hover {
+  color: #0a58ca;
+}
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -495,8 +581,8 @@ onMounted(() => {
   background: white;
   padding: 24px;
   border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
+  max-width: 700px;
+  width: 95%;
   max-height: 90vh;
   overflow-y: auto;
 }

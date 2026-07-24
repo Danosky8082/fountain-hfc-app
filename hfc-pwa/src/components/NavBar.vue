@@ -36,6 +36,9 @@
           <li class="nav-item" v-if="isAdmin">
             <router-link class="nav-link" to="/members">Members</router-link>
           </li>
+          <li class="nav-item" v-if="isAdmin">
+            <router-link class="nav-link" to="/admin">⚙️ Admin</router-link>
+          </li>
 
           <li class="nav-item">
             <router-link class="nav-link" to="/report">Report</router-link>

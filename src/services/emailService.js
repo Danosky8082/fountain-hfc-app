@@ -1,14 +1,32 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+const { promisify } = require('util');
+
+const resolve4 = promisify(dns.resolve4);
+
+// Get IPv4 address for smtp.gmail.com
+let smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+let smtpHostIp = 'smtp.gmail.com'; // fallback
+
+// Resolve IPv4
+resolve4(smtpHost)
+  .then((addresses) => {
+    if (addresses.length > 0) {
+      smtpHostIp = addresses[0];
+      console.log(`✅ Resolved ${smtpHost} to IPv4: ${smtpHostIp}`);
+    }
+  })
+  .catch((err) => console.warn('⚠️ Could not resolve IPv4, using hostname:', err));
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  host: smtpHostIp, // Use the resolved IPv4 address
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
-  family: 4, // Force IPv4 – fixes ENETUNREACH
+  family: 4, // still force IPv4
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 15000,

@@ -14,13 +14,28 @@
         <input v-model="search" type="text" class="form-control" placeholder="Search members..." />
         <span class="input-group-text"><i class="bi bi-search"></i></span>
       </div>
+      <!-- Show a warning if the week is already submitted -->
+      <div v-if="sessionSubmitted" class="alert alert-warning">
+        ⚠️ The current week has already been submitted. You cannot mark additional members present.
+        <span v-if="authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD'">
+          Use the <router-link to="/admin/correction">Correction page</router-link> to adjust attendance.
+        </span>
+      </div>
       <div class="list-group">
         <div v-for="member in filteredMembers" :key="member.id" class="list-group-item d-flex justify-content-between align-items-center">
           <span>{{ member.fullName }}</span>
           <div>
             <span v-if="member.isPresent" class="badge bg-success me-2">Present</span>
-            <button v-if="!member.isPresent" class="btn btn-sm btn-outline-primary me-1" @click="checkIn(member.id)">Check-in</button>
-            <!-- ✅ QR Button – exactly like Members page -->
+            <button 
+              v-if="!member.isPresent && !sessionSubmitted" 
+              class="btn btn-sm btn-outline-primary me-1" 
+              @click="checkIn(member.id)"
+            >
+              Check-in
+            </button>
+            <button v-if="!member.isPresent && sessionSubmitted" class="btn btn-sm btn-secondary me-1" disabled>
+              Check-in
+            </button>
             <button class="btn btn-sm btn-info" @click="showQR(member.id)">QR</button>
           </div>
         </div>
@@ -57,6 +72,7 @@ const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
 const search = ref('');
+const sessionSubmitted = ref(false); // ✅ Track whether the current week is submitted
 
 // Modal state
 const showAddMemberModal = ref(false);
@@ -93,6 +109,8 @@ const fetchAttendance = async () => {
         const found = sessionMembers.find(sm => sm.id === m.id);
         return { ...m, isPresent: found?.isPresent || false };
       });
+      // ✅ Store the submission status
+      sessionSubmitted.value = res.data.data.session.isSubmitted;
     }
   } catch (error) {
     console.error('Failed to fetch attendance', error);
@@ -100,6 +118,12 @@ const fetchAttendance = async () => {
 };
 
 const checkIn = async (memberId) => {
+  // ✅ Prevent check‑in if the week is already submitted
+  if (sessionSubmitted.value) {
+    alert('⚠️ The current week has already been submitted. You cannot add more check‑ins.');
+    return;
+  }
+
   try {
     const res = await api.post('/attendance/mark', { memberId, checkInMethod: 'MANUAL' });
     if (res.data.success) {

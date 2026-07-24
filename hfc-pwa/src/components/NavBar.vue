@@ -18,44 +18,41 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav me-auto">
-          <!-- Common links -->
+          <!-- Common links (with icons) -->
           <li class="nav-item">
-            <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
+            <router-link class="nav-link" to="/dashboard">🏠 Dashboard</router-link>
           </li>
           <li class="nav-item">
-            <router-link class="nav-link" to="/scanner">Scan QR</router-link>
+            <router-link class="nav-link" to="/scanner">📷 Scan QR</router-link>
           </li>
           <li class="nav-item">
-            <router-link class="nav-link" to="/manual">Manual Check-in</router-link>
+            <router-link class="nav-link" to="/manual">📋 Manual Check-in</router-link>
           </li>
           <li class="nav-item">
-            <router-link class="nav-link" to="/attendance">Attendance</router-link>
+            <router-link class="nav-link" to="/attendance">📊 Attendance</router-link>
           </li>
 
           <!-- Admin-only links -->
-          <li class="nav-item" v-if="isAdmin">
-            <router-link class="nav-link" to="/members">Members</router-link>
-          </li>
           <li class="nav-item" v-if="isAdmin">
             <router-link class="nav-link" to="/admin">⚙️ Admin</router-link>
           </li>
 
           <li class="nav-item">
-            <router-link class="nav-link" to="/report">Report</router-link>
+            <router-link class="nav-link" to="/report">📄 Report</router-link>
           </li>
 
           <!-- Admin/HOD links -->
           <li class="nav-item" v-if="isAdminOrHod">
-            <router-link class="nav-link" to="/admin/users">👥 Users</router-link>
+            <router-link class="nav-link" to="/admin/users">👤 Users</router-link>
           </li>
           <li class="nav-item" v-if="isAdminOrHod">
             <router-link class="nav-link" to="/admin/correction">📝 Correction</router-link>
           </li>
           <li class="nav-item" v-if="isAdminOrHod">
-            <router-link class="nav-link" to="/hod-dashboard">📊 HOD Dashboard</router-link>
+            <router-link class="nav-link" to="/hod-dashboard">📈 HOD Dashboard</router-link>
           </li>
         </ul>
-        <button class="btn btn-outline-light" @click="logout">Logout</button>
+        <button class="btn btn-outline-light" @click="logout">🚪 Logout</button>
       </div>
     </div>
   </nav>

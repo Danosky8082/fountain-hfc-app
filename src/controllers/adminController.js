@@ -1,5 +1,6 @@
 const prisma = require('../prisma');
 const bcrypt = require('bcryptjs');
+const { refreshReportCounts } = require('../utils/reportUtils');
 
 // ---- Create Fellowship ----
 exports.createFellowship = async (req, res) => {
@@ -277,6 +278,7 @@ exports.deleteFellowship = async (req, res) => {
 };
 
 // ─── Correct past attendance ────────────────────────────────────
+// ─── Correct Attendance ─────────────────────────────────────────
 exports.correctAttendance = async (req, res) => {
   try {
     const { fellowshipId, weekNumber, monthYear, memberId, checkInMethod } = req.body;
@@ -285,11 +287,8 @@ exports.correctAttendance = async (req, res) => {
     if (!fellowshipId || !weekNumber || !monthYear || !memberId || !checkInMethod) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: fellowshipId, weekNumber, monthYear, memberId, checkInMethod',
+        message: 'Missing required fields',
       });
-    }
-    if (!['MANUAL', 'QR_SCAN', 'VIRTUAL', 'PIN_CHECKIN'].includes(checkInMethod)) {
-      return res.status(400).json({ success: false, message: 'Invalid checkInMethod' });
     }
 
     // 1. Find or create the attendance session for that week
@@ -304,7 +303,6 @@ exports.correctAttendance = async (req, res) => {
     });
 
     if (!session) {
-      // Create a session if it doesn't exist (mark as not submitted)
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId,
@@ -337,7 +335,8 @@ exports.correctAttendance = async (req, res) => {
       },
     });
 
-    // 3. Optionally, mark the session as submitted if all members are present? – we don't auto-submit.
+    // ─── 3. Refresh the MonthlyReport counts ──────────────────
+    await refreshReportCounts(fellowshipId, monthYear);
 
     res.status(200).json({
       success: true,

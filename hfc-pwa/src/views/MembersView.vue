@@ -1,6 +1,6 @@
 <template>
   <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
       <h4>👥 All Members (Register)</h4>
       <button class="btn btn-primary" @click="goToAdmin">➕ Add Member</button>
     </div>
@@ -13,35 +13,37 @@
     <div v-if="loading || !authStore.token" class="text-center"><LoadingSpinner /></div>
     <div v-else-if="members.length === 0" class="alert alert-info">No members found.</div>
     <div v-else>
-      <table class="table table-bordered table-hover">
-        <thead>
-          <tr>
-            <th>Member Number</th>
-            <th>Name</th>
-            <th>Phone</th>
-            <th>Email</th>
-            <th>Fellowship</th>
-            <th>QR Code</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="member in filteredMembers" :key="member.id">
-            <td>{{ member.memberNumber || '—' }}</td>
-            <td>{{ member.fullName }}</td>
-            <td>{{ member.phone || '—' }}</td>
-            <td>{{ member.email || '—' }}</td>
-            <td>{{ member.fellowship?.name || '—' }}</td>
-            <td>
-              <button class="btn btn-sm btn-info" @click="showQR(member.id)">QR</button>
-            </td>
-            <td>
-              <button class="btn btn-sm btn-warning me-1" @click="openEditModal(member)">✏️</button>
-              <button class="btn btn-sm btn-danger" @click="confirmDelete(member.id)">🗑️</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Fellowship</th>
+              <th>Member #</th>
+              <th>QR Code</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="member in filteredMembers" :key="member.id">
+              <td>{{ member.fullName }}</td>
+              <td>{{ member.phone || '—' }}</td>
+              <td>{{ member.email || '—' }}</td>
+              <td>{{ member.fellowship?.name || '—' }}</td>
+              <td>{{ member.memberNumber || '—' }}</td>
+              <td>
+                <button class="btn btn-sm btn-info" @click="showQR(member.id)">QR</button>
+              </td>
+              <td>
+                <button class="btn btn-sm btn-warning me-1" @click="openEditModal(member)">✏️</button>
+                <button class="btn btn-sm btn-danger" @click="confirmDelete(member.id)">🗑️</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Edit Modal -->
@@ -71,7 +73,7 @@
               <option v-for="f in fellowships" :key="f.id" :value="f.id">{{ f.name }}</option>
             </select>
           </div>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 flex-wrap">
             <button type="submit" class="btn btn-success" :disabled="savingEdit">
               <span v-if="savingEdit" class="spinner-border spinner-border-sm me-2"></span>
               Save
@@ -225,26 +227,5 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.modal-content {
-  background: white;
-  padding: 24px;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-button { min-height: 44px; touch-action: manipulation; }
+/* Override global modal if needed */
 </style>

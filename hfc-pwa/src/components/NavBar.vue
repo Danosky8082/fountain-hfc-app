@@ -10,12 +10,15 @@
         type="button"
         data-bs-toggle="collapse"
         data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
       >
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav me-auto">
-          <!-- ─── Core Fellowship Leader functions ─── -->
+          <!-- Common links -->
           <li class="nav-item">
             <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
           </li>
@@ -28,14 +31,17 @@
           <li class="nav-item">
             <router-link class="nav-link" to="/attendance">Attendance</router-link>
           </li>
+
+          <!-- Admin-only links -->
+          <li class="nav-item" v-if="isAdmin">
+            <router-link class="nav-link" to="/members">Members</router-link>
+          </li>
+
           <li class="nav-item">
             <router-link class="nav-link" to="/report">Report</router-link>
           </li>
 
-          <!-- ─── Admin / HOD functions (grouped) ─── -->
-          <li class="nav-item" v-if="isAdmin">
-            <router-link class="nav-link" to="/members">Members</router-link>
-          </li>
+          <!-- Admin/HOD links -->
           <li class="nav-item" v-if="isAdminOrHod">
             <router-link class="nav-link" to="/admin/users">👥 Users</router-link>
           </li>

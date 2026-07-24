@@ -161,16 +161,10 @@ exports.requestOTP = async (req, res) => {
     });
     console.log('✅ OTP saved to database');
 
-    // ─── DEBUG MODE: Return OTP directly ──────────────────────
-    console.log('🔑 Returning OTP directly (debug mode)');
-    return res.status(200).json({
-      success: true,
-      message: 'OTP generated (debug)',
-      data: { userId: user.id, otp: otp },
-    });
+    
 
     // ─── (Email sending commented out – uncomment later) ────
-    /*
+    
     try {
       const { sendReportEmail } = require('../services/emailService');
       const result = await sendReportEmail({
@@ -204,7 +198,7 @@ exports.requestOTP = async (req, res) => {
         message: 'Email service unavailable.',
       });
     }
-    */
+    
 
   } catch (error) {
     console.error('❌ Request OTP error:', error);

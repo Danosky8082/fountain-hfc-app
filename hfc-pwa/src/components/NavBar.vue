@@ -23,7 +23,7 @@
             <router-link class="nav-link" to="/dashboard">🏠 Dashboard</router-link>
           </li>
           <li class="nav-item">
-            <router-link class="nav-link" to="/scanner">📷  Scan-QR</router-link>
+            <router-link class="nav-link" to="/scanner">📷 QR</router-link>
           </li>
           <li class="nav-item">
             <router-link class="nav-link" to="/manual">📋 Manual</router-link>

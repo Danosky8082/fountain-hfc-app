@@ -73,8 +73,8 @@ model User {
   isActive      Boolean  @default(true)
   isBlocked     Boolean  @default(false)
   lastLogin     DateTime?
-  refreshToken  String?  // For refresh token rotation
-  resetToken    String?  // For password reset
+  refreshToken  String?
+  resetToken    String?
   resetTokenExpiry DateTime?
 
   // Relations
@@ -84,6 +84,8 @@ model User {
   otps          OTP[]
   passwordResets PasswordReset[]
   auditLogs     AuditLog[]
+  notifications Notification[]  // ✅ Added this relation
+  finalizedReports MonthlyReport[] // ✅ Added this relation
 
   // Timestamps
   createdAt     DateTime @default(now())
@@ -135,9 +137,9 @@ model AttendanceSession {
   fellowshipId     String
   fellowship       Fellowship @relation(fields: [fellowshipId], references: [id])
   weekNumber       Int
-  monthYear        String   // Format: "YYYY-MM"
+  monthYear        String
   meetingDate      DateTime
-  meetingType      String?  // e.g., "Weekly", "Special", "Mid-week"
+  meetingType      String?
   isSubmitted      Boolean  @default(false)
   submittedAt      DateTime?
   submittedBy      String?
@@ -167,7 +169,7 @@ model AttendanceRecord {
   memberId         String
   member           Member @relation(fields: [memberId], references: [id])
   checkInMethod    CheckInMethod @default(QR_CODE)
-  checkedInBy      String   // User ID who checked in
+  checkedInBy      String
   checkInTime      DateTime @default(now())
   checkInDate      DateTime @default(now())
   notes            String?
@@ -189,7 +191,7 @@ model MonthlyReport {
   id            String   @id @default(cuid())
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
-  monthYear     String   // Format: "YYYY-MM"
+  monthYear     String
 
   // Weekly attendance counts
   week1Date     DateTime?
@@ -210,7 +212,7 @@ model MonthlyReport {
   followUps     Int      @default(0)
   escalations   String?
   comments      String?
-  totalAttendance Int?   // Calculated field
+  totalAttendance Int?
 
   // Report status
   status        ReportStatus @default(DRAFT)
@@ -234,11 +236,11 @@ model OTP {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  otp       String   // Hashed 6-digit code
+  otp       String
   expiresAt DateTime
   used      Boolean  @default(false)
-  type      String?  // "LOGIN", "RESET", "VERIFY"
-  attempts  Int      @default(0)  // Failed attempts
+  type      String?
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
   // Indexes
@@ -267,10 +269,10 @@ model AuditLog {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  action    String   // e.g., "LOGIN", "LOGOUT", "CREATE", "UPDATE", "DELETE"
-  entity    String   // e.g., "MEMBER", "FELLOWSHIP", "USER"
-  entityId  String?  // ID of the affected entity
-  changes   Json?    // Track changes made
+  action    String
+  entity    String
+  entityId  String?
+  changes   Json?
   ipAddress String?
   userAgent String?
   details   String?
@@ -283,7 +285,7 @@ model AuditLog {
   @@index([entity])
 }
 
-// ─── System Settings Model ────────────────────────────
+// ─── System Setting Model ────────────────────────────
 model SystemSetting {
   id          String   @id @default(cuid())
   key         String   @unique
@@ -304,13 +306,13 @@ model SystemSetting {
 model Notification {
   id          String   @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])  // ✅ Fixed relation
   title       String
   message     String
-  type        String?  // "INFO", "WARNING", "ERROR", "SUCCESS"
+  type        String?
   isRead      Boolean  @default(false)
   readAt      DateTime?
-  link        String?  // Optional link to related content
+  link        String?
   createdAt   DateTime @default(now())
 
   // Indexes
@@ -323,9 +325,9 @@ model Notification {
 model Backup {
   id          String   @id @default(cuid())
   fileName    String
-  fileSize    Int?     // Size in bytes
-  type        String?  // "FULL", "INCREMENTAL"
-  status      String?  // "PENDING", "COMPLETED", "FAILED"
+  fileSize    Int?
+  type        String?
+  status      String?
   createdBy   String?
   createdAt   DateTime @default(now())
   completedAt DateTime?

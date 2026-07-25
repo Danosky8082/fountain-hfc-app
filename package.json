@@ -5,7 +5,13 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "build": "npm install --legacy-peer-deps && npx prisma generate",
+    "postinstall": "npx prisma generate",
     "db:seed": "node prisma/seed.js",
+    "migrate": "npx prisma migrate deploy",
+    "migrate:dev": "npx prisma migrate dev",
+    "studio": "npx prisma studio",
+    "prisma:generate": "npx prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,6 +19,9 @@
   "license": "ISC",
   "type": "commonjs",
   "description": "",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^6.19.3",

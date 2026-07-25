@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ──────────────────────────────────────────────
 enum Role {
   FL
   ASSOCIATE
@@ -19,23 +21,47 @@ enum ReportStatus {
   FINALIZED
 }
 
+enum CheckInMethod {
+  QR_CODE
+  MANUAL
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// ─── Fellowship Model ──────────────────────────────────
 model Fellowship {
   id            String   @id @default(cuid())
-  name          String
+  name          String   @unique
   location      String
+  description   String?
   leaderId      String?  @unique
   associateId   String?  @unique
+  isActive      Boolean  @default(true)
 
+  // Relations
   leader        User?    @relation("LeaderRelation", fields: [leaderId], references: [id])
   associate     User?    @relation("AssociateRelation", fields: [associateId], references: [id])
   members       Member[]
   sessions      AttendanceSession[]
   reports       MonthlyReport[]
 
+  // Timestamps
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Indexes
+  @@index([name])
+  @@index([isActive])
+  @@index([leaderId])
+  @@index([associateId])
 }
 
+// ─── User Model ────────────────────────────────────────
 model User {
   id            String   @id @default(cuid())
   churchId      String   @unique
@@ -43,72 +69,129 @@ model User {
   fullName      String
   passwordHash  String
   role          Role     @default(FL)
+  phone         String?
+  isActive      Boolean  @default(true)
+  isBlocked     Boolean  @default(false)
+  lastLogin     DateTime?
+  refreshToken  String?  // For refresh token rotation
+  resetToken    String?  // For password reset
+  resetTokenExpiry DateTime?
 
+  // Relations
   leading       Fellowship? @relation("LeaderRelation")
   assisting     Fellowship? @relation("AssociateRelation")
   submittedSessions AttendanceSession[]
-  otps          OTP[]   // 👈 Reverse relation for OTP
+  otps          OTP[]
+  passwordResets PasswordReset[]
+  auditLogs     AuditLog[]
 
+  // Timestamps
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Indexes
+  @@index([email])
+  @@index([churchId])
+  @@index([role])
+  @@index([isActive])
 }
 
+// ─── Member Model ──────────────────────────────────────
 model Member {
   id            String   @id @default(cuid())
   fullName      String
   phone         String?
   email         String?
+  gender        Gender?
+  dateOfBirth   DateTime?
+  address       String?
   qrUniqueId    String   @unique
   memberNumber  String?  @unique
   isActive      Boolean  @default(true)
+  joinedDate    DateTime @default(now())
+  notes         String?
 
+  // Relations
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
-
   attendanceRecords AttendanceRecord[]
 
+  // Timestamps
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Indexes
+  @@index([fellowshipId])
+  @@index([email])
+  @@index([phone])
+  @@index([memberNumber])
+  @@index([isActive])
+  @@index([qrUniqueId])
 }
 
+// ─── Attendance Session Model ─────────────────────────
 model AttendanceSession {
   id               String   @id @default(cuid())
   fellowshipId     String
   fellowship       Fellowship @relation(fields: [fellowshipId], references: [id])
   weekNumber       Int
-  monthYear        String
+  monthYear        String   // Format: "YYYY-MM"
   meetingDate      DateTime
+  meetingType      String?  // e.g., "Weekly", "Special", "Mid-week"
   isSubmitted      Boolean  @default(false)
   submittedAt      DateTime?
   submittedBy      String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  notes            String?
 
+  // Relations
   records          AttendanceRecord[]
   submitter        User?    @relation(fields: [submittedBy], references: [id])
 
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Indexes & Constraints
   @@unique([fellowshipId, weekNumber, monthYear])
+  @@index([fellowshipId])
+  @@index([meetingDate])
+  @@index([monthYear])
+  @@index([isSubmitted])
 }
 
+// ─── Attendance Record Model ──────────────────────────
 model AttendanceRecord {
   id               String   @id @default(cuid())
   sessionId        String
   session          AttendanceSession @relation(fields: [sessionId], references: [id])
   memberId         String
   member           Member @relation(fields: [memberId], references: [id])
-  checkInMethod    String
-  checkedInBy      String
-  checkedInAt      DateTime @default(now())
+  checkInMethod    CheckInMethod @default(QR_CODE)
+  checkedInBy      String   // User ID who checked in
+  checkInTime      DateTime @default(now())
+  checkInDate      DateTime @default(now())
+  notes            String?
 
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Indexes & Constraints
   @@unique([sessionId, memberId])
+  @@index([memberId])
+  @@index([sessionId])
+  @@index([checkInDate])
+  @@index([checkInMethod])
 }
 
+// ─── Monthly Report Model ──────────────────────────────
 model MonthlyReport {
   id            String   @id @default(cuid())
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
-  monthYear     String
+  monthYear     String   // Format: "YYYY-MM"
 
+  // Weekly attendance counts
   week1Date     DateTime?
   week2Date     DateTime?
   week3Date     DateTime?
@@ -120,32 +203,135 @@ model MonthlyReport {
   week4Count    Int      @default(0)
   week5Count    Int      @default(0)
 
+  // Ministry statistics
   prayerFlag    Boolean  @default(false)
   firstTimers   Int      @default(0)
   newMembers    Int      @default(0)
   followUps     Int      @default(0)
   escalations   String?
   comments      String?
+  totalAttendance Int?   // Calculated field
 
+  // Report status
   status        ReportStatus @default(DRAFT)
   finalizedAt   DateTime?
   finalizedBy   String?
+  finalizedUser User?    @relation(fields: [finalizedBy], references: [id])
 
+  // Timestamps
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Indexes & Constraints
   @@unique([fellowshipId, monthYear])
+  @@index([fellowshipId])
+  @@index([monthYear])
+  @@index([status])
 }
 
+// ─── OTP Model ─────────────────────────────────────────
 model OTP {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  otp       String   // hashed 6‑digit code
+  otp       String   // Hashed 6-digit code
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  type      String?  // "LOGIN", "RESET", "VERIFY"
+  attempts  Int      @default(0)  // Failed attempts
+  createdAt DateTime @default(now())
+
+  // Indexes
+  @@index([userId, used])
+  @@index([expiresAt])
+  @@index([otp])
+}
+
+// ─── Password Reset Model ─────────────────────────────
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@index([userId, used])
-  @@index([expiresAt])
+  // Indexes
+  @@index([token])
+  @@index([userId])
+}
+
+// ─── Audit Log Model ──────────────────────────────────
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String   // e.g., "LOGIN", "LOGOUT", "CREATE", "UPDATE", "DELETE"
+  entity    String   // e.g., "MEMBER", "FELLOWSHIP", "USER"
+  entityId  String?  // ID of the affected entity
+  changes   Json?    // Track changes made
+  ipAddress String?
+  userAgent String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  // Indexes
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entity])
+}
+
+// ─── System Settings Model ────────────────────────────
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  category    String?
+  isEncrypted Boolean  @default(false)
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Indexes
+  @@index([key])
+  @@index([category])
+}
+
+// ─── Notification Model ───────────────────────────────
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  title       String
+  message     String
+  type        String?  // "INFO", "WARNING", "ERROR", "SUCCESS"
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+  link        String?  // Optional link to related content
+  createdAt   DateTime @default(now())
+
+  // Indexes
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ─── Backup Model ─────────────────────────────────────
+model Backup {
+  id          String   @id @default(cuid())
+  fileName    String
+  fileSize    Int?     // Size in bytes
+  type        String?  // "FULL", "INCREMENTAL"
+  status      String?  // "PENDING", "COMPLETED", "FAILED"
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  notes       String?
+
+  // Indexes
+  @@index([createdAt])
+  @@index([status])
 }

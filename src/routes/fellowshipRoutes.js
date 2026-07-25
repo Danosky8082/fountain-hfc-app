@@ -3,16 +3,22 @@ const express = require('express');
 const router = express.Router();
 const fellowshipController = require('../controllers/fellowshipController');
 const { verifyToken } = require('../middlewares/authMiddleware');
+const { checkRole } = require('../middlewares/roleMiddleware');
 
-// All routes here are protected by the verifyToken middleware
-// The user must be logged in with a valid JWT.
+// ─── All routes are protected ──────────────────────────
+router.use(verifyToken);
 
-// GET /api/fellowship/members - List all members in the FL's fellowship
-router.get('/members', verifyToken, fellowshipController.getMembers);
+// ─── Public Fellowship Routes (for all authenticated users) ──
+router.get('/members', fellowshipController.getMembers);
+router.get('/details', fellowshipController.getFellowshipDetails);
+router.get('/list', fellowshipController.getAllFellowships);
 
-// GET /api/fellowship/details - Get fellowship info (name, location)
-router.get('/details', verifyToken, fellowshipController.getFellowshipDetails);
+// ─── Admin Only Routes ──────────────────────────────────
+router.post('/', checkRole(['ADMIN']), fellowshipController.createFellowship);
+router.put('/:id', checkRole(['ADMIN']), fellowshipController.updateFellowship);
+router.delete('/:id', checkRole(['ADMIN']), fellowshipController.deleteFellowship);
 
-router.get('/list', verifyToken, fellowshipController.getAllFellowships);
+// ─── Stats Route (Admin & HOD) ─────────────────────────
+router.get('/:fellowshipId/stats', checkRole(['ADMIN', 'HOD']), fellowshipController.getFellowshipStats);
 
 module.exports = router;

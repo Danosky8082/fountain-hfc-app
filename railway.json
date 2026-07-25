@@ -1,13 +1,12 @@
 {
   "build": {
     "builder": "NIXPACKS",
-    "nixPkgs": ["nodejs", "openssl"],
-    "buildCommand": "npm install --legacy-peer-deps && npx prisma generate"
+    "buildCommand": "npm install --legacy-peer-deps && npx prisma generate",
+    "nixPkgs": ["nodejs_18", "openssl"]
   },
   "deploy": {
-    "startCommand": "node index.js",
+    "startCommand": "node src/index.js",
     "healthcheckPath": "/api/health",
-    "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE"
   }
 }

@@ -1,7 +1,7 @@
 const prisma = require('../prisma');
-const archiver = require('archiver');
+const AdmZip = require('adm-zip');
 
-// ─── Helper to convert array of objects to CSV ──────────────
+// ─── Helper: Convert array of objects to CSV ──────────────
 const toCSV = (data, headers) => {
   if (!data || data.length === 0) return '';
   const headerRow = headers.join(',');
@@ -35,14 +35,12 @@ exports.exportAllData = async (req, res) => {
       prisma.oTP.findMany(),
     ]);
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename=fountain_hfc_export.zip');
-    archive.pipe(res);
+    const zip = new AdmZip();
 
+    // Helper to add CSV file to ZIP
     const addCSV = (name, data, headers) => {
       const csv = toCSV(data, headers);
-      archive.append(csv, { name: `${name}.csv` });
+      zip.addFile(`${name}.csv`, Buffer.from(csv, 'utf-8'));
     };
 
     // Users
@@ -116,7 +114,12 @@ exports.exportAllData = async (req, res) => {
     // OTPs
     addCSV('otps', otps, ['id', 'userId', 'otp', 'expiresAt', 'used', 'createdAt']);
 
-    await archive.finalize();
+    // Generate ZIP buffer
+    const zipBuffer = zip.toBuffer();
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename=fountain_hfc_export.zip');
+    res.send(zipBuffer);
   } catch (error) {
     console.error('Export error:', error);
     if (!res.headersSent) {

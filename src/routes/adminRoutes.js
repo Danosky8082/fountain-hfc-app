@@ -5,7 +5,7 @@ const qrController = require('../controllers/qrController');
 const { verifyToken } = require('../middlewares/authMiddleware');
 const { requireRole } = require('../middlewares/roleMiddleware');
 
-// All admin routes require authentication and ADMIN role
+// All routes require authentication and ADMIN role
 router.use(verifyToken);
 router.use(requireRole(['ADMIN']));
 
@@ -32,8 +32,8 @@ router.post('/attendance/correct', adminController.correctAttendance);
 // ─── Batch QR ────────────────────────────────────────────────
 router.get('/qr/batch', qrController.generateBatchQR);
 
-router.get('/export/all', adminController.verifyAdmin, require('../controllers/exportController').exportAllData);
-// or use requireRole(['ADMIN']) – we already have that middleware
-router.get('/export/all', requireRole(['ADMIN']), require('../controllers/exportController').exportAllData);
+// ─── Export all data ─────────────────────────────────────────
+const exportController = require('../controllers/exportController');
+router.get('/export/all', exportController.exportAllData);
 
 module.exports = router;

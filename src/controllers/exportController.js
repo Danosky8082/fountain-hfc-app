@@ -17,10 +17,6 @@ const toCSV = (data, headers) => {
 // ─── Export all data as ZIP ────────────────────────────────────
 exports.exportAllData = async (req, res) => {
   try {
-    const token = req.query.token || req.headers.authorization?.split(' ')[1];
-    // (token verification already done by admin middleware – but we'll rely on role)
-    // This route is protected by requireRole(['ADMIN'])
-
     const [
       users,
       fellowships,
@@ -44,7 +40,6 @@ exports.exportAllData = async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename=fountain_hfc_export.zip');
     archive.pipe(res);
 
-    // Helper to add CSV file to archive
     const addCSV = (name, data, headers) => {
       const csv = toCSV(data, headers);
       archive.append(csv, { name: `${name}.csv` });

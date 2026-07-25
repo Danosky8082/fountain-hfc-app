@@ -8,18 +8,19 @@
 </template>
 
 <script setup>
-import Toast from './components/Toast.vue';
-import { ref, onMounted } from 'vue';
-import GlobalLoading from './components/GlobalLoading.vue';
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useAuthStore } from './stores/auth';
 import NavBar from './components/NavBar.vue';
+import GlobalLoading from './components/GlobalLoading.vue';
+import Toast from './components/Toast.vue';
 
 const authStore = useAuthStore();
-
 const toastRef = ref(null);
 
+// Expose toast globally
 onMounted(() => {
   window.$toast = toastRef.value;
+  // Restore session
+  authStore.restoreSession();
 });
 </script>

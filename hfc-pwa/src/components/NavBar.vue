@@ -26,7 +26,7 @@
             <router-link class="nav-link" to="/scanner">📷 Scan QR</router-link>
           </li>
           <li class="nav-item">
-            <router-link class="nav-link" to="/manual">📋 Manual Check-in</router-link>
+            <router-link class="nav-link" to="/manual">📋 Manual</router-link>
           </li>
           <li class="nav-item">
             <router-link class="nav-link" to="/attendance">📊 Attendance</router-link>
@@ -40,6 +40,10 @@
           <li class="nav-item">
             <router-link class="nav-link" to="/report">📄 Report</router-link>
           </li>
+
+          <li class="nav-item">
+  <router-link class="nav-link" to="/help">📘 Guide</router-link>
+</li>
 
           <!-- Admin/HOD links -->
           <li class="nav-item" v-if="isAdminOrHod">

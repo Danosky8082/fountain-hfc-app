@@ -32,4 +32,8 @@ router.post('/attendance/correct', adminController.correctAttendance);
 // ─── Batch QR ────────────────────────────────────────────────
 router.get('/qr/batch', qrController.generateBatchQR);
 
+router.get('/export/all', adminController.verifyAdmin, require('../controllers/exportController').exportAllData);
+// or use requireRole(['ADMIN']) – we already have that middleware
+router.get('/export/all', requireRole(['ADMIN']), require('../controllers/exportController').exportAllData);
+
 module.exports = router;

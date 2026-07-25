@@ -207,6 +207,19 @@
       </div>
     </div>
 
+    <!-- Export Data -->
+<div class="card mb-4">
+  <div class="card-header bg-dark text-white">📦 Backup / Export</div>
+  <div class="card-body">
+    <p class="text-muted">Download all data as CSV files (ZIP archive).</p>
+    <button class="btn btn-dark" @click="exportAllData" :disabled="exporting">
+      <span v-if="exporting" class="spinner-border spinner-border-sm me-2"></span>
+      {{ exporting ? 'Exporting...' : '📥 Export All Data' }}
+    </button>
+    <div v-if="exportMessage" class="mt-2" :class="exportMessageClass">{{ exportMessage }}</div>
+  </div>
+</div>
+
     <!-- === Edit Fellowship Modal === -->
     <div v-if="showEditFellowshipModal" class="modal-overlay" @click.self="closeEditFellowship">
       <div class="modal-content">
@@ -456,6 +469,34 @@ const createUser = async () => {
     userMessageClass.value = 'text-danger';
   } finally {
     userLoading.value = false;
+  }
+};
+
+const exporting = ref(false);
+const exportMessage = ref('');
+const exportMessageClass = ref('text-success');
+
+const exportAllData = async () => {
+  exporting.value = true;
+  exportMessage.value = '';
+  try {
+    const response = await api.get('/admin/export/all', {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/zip' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'fountain_hfc_export.zip';
+    link.click();
+    URL.revokeObjectURL(link.href);
+    exportMessage.value = '✅ Export downloaded successfully!';
+    exportMessageClass.value = 'text-success';
+  } catch (error) {
+    const msg = error.response?.data?.message || error.message || 'Export failed.';
+    exportMessage.value = '❌ ' + msg;
+    exportMessageClass.value = 'text-danger';
+  } finally {
+    exporting.value = false;
   }
 };
 

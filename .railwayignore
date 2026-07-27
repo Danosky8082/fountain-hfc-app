@@ -1,0 +1,12 @@
+# Create the file
+echo "node_modules/
+.git/
+.env
+*.log
+.DS_Store
+dist/
+build/
+coverage/
+.vscode/
+.idea/
+" > .railwayignore

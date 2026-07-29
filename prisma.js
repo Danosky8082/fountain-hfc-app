@@ -208,9 +208,9 @@ module.exports = {
   gracefulShutdown,
 };
 
-// ─── Auto-connect on import ──────────────────────────────
-// Test connection automatically when imported
-if (process.env.NODE_ENV !== 'test') {
+// ─── Auto-connect on import (FIXED - Skips Prisma Studio) ──
+// Only auto-connect when NOT running Prisma Studio
+if (process.env.NODE_ENV !== 'test' && !process.env.PRISMA_STUDIO) {
   testConnection();
 }
 

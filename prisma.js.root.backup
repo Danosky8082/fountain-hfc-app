@@ -216,3 +216,4 @@ if (process.env.NODE_ENV !== 'test' && !process.env.PRISMA_STUDIO) {
 
 // ─── Export prisma as default for backward compatibility ─
 module.exports.default = prisma;
+

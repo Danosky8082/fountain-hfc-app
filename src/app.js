@@ -6,7 +6,7 @@ const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const prisma = require('./prisma');
+const prisma = require('./src/prisma');
 require('dotenv').config();
 
 const app = express();

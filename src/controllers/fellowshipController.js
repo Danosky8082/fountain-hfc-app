@@ -243,10 +243,10 @@ exports.createFellowship = async (req, res) => {
       },
       include: {
         leader: {
-          select: { id: true, fullName: true, email: true }
+          select: { id: true, fullName: true, email: true, role: true }
         },
         associate: {
-          select: { id: true, fullName: true, email: true }
+          select: { id: true, fullName: true, email: true, role: true }
         }
       }
     });
@@ -287,7 +287,7 @@ exports.createFellowship = async (req, res) => {
     if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,
-        message: 'Unique constraint violation',
+        message: 'This user is already assigned to another fellowship',
         error: error.message
       });
     }
@@ -329,6 +329,21 @@ exports.updateFellowship = async (req, res) => {
           message: 'Leader not found'
         });
       }
+
+      // Check if leader is already leading another fellowship (excluding this one)
+      const existingLeadership = await prisma.fellowship.findFirst({
+        where: {
+          leaderId: leaderId,
+          NOT: { id: id }
+        }
+      });
+      
+      if (existingLeadership) {
+        return res.status(400).json({
+          success: false,
+          message: 'This user is already leading another fellowship'
+        });
+      }
     }
 
     // Validate associate if provided
@@ -339,25 +354,71 @@ exports.updateFellowship = async (req, res) => {
       if (!associate) {
         return res.status(400).json({
           success: false,
-          message: 'Associate not found'
+          message: `Associate with ID ${associateId} not found`
+        });
+      }
+
+      // Check if associate is already assigned to another fellowship (excluding this one)
+      const existingAssociate = await prisma.fellowship.findFirst({
+        where: {
+          associateId: associateId,
+          NOT: { id: id }
+        }
+      });
+      
+      if (existingAssociate) {
+        return res.status(400).json({
+          success: false,
+          message: 'This user is already assigned as associate to another fellowship'
         });
       }
     }
 
+    // Build update data
+    const updateData = {
+      name: name?.trim(),
+      location: location?.trim(),
+    };
+
+    // Handle leaderId - handle both setting and removing
+    if (leaderId !== undefined) {
+      // If leaderId is null or empty string, set to null; otherwise use the value
+      updateData.leaderId = leaderId || null;
+    }
+
+    // Handle associateId - handle both setting and removing
+    if (associateId !== undefined) {
+      // If associateId is null or empty string, set to null; otherwise use the value
+      updateData.associateId = associateId || null;
+    }
+
+    // Update user roles if needed
+    if (leaderId) {
+      await prisma.user.update({
+        where: { id: leaderId },
+        data: { role: 'FL' }
+      });
+    }
+
+    if (associateId) {
+      await prisma.user.update({
+        where: { id: associateId },
+        data: { role: 'ASSOCIATE' }
+      });
+    }
+
     const fellowship = await prisma.fellowship.update({
       where: { id },
-      data: {
-        name: name?.trim(),
-        location: location?.trim(),
-        leaderId: leaderId || null,
-        associateId: associateId || null,
-      },
+      data: updateData,
       include: {
         leader: {
-          select: { id: true, fullName: true, email: true }
+          select: { id: true, fullName: true, email: true, role: true }
         },
         associate: {
-          select: { id: true, fullName: true, email: true }
+          select: { id: true, fullName: true, email: true, role: true }
+        },
+        _count: {
+          select: { members: true, sessions: true, reports: true }
         }
       }
     });
@@ -370,6 +431,24 @@ exports.updateFellowship = async (req, res) => {
 
   } catch (error) {
     console.error('Update Fellowship Error:', error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2003') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid leaderId or associateId - User does not exist',
+        error: error.message
+      });
+    }
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        success: false,
+        message: 'This user is already assigned to another fellowship',
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to update fellowship',

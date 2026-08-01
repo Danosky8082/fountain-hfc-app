@@ -2,10 +2,9 @@ const QRCode = require('qrcode');
 const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
-const archiver = require('archiver'); 
 const prisma = require('../prisma');
 const jwt = require('jsonwebtoken');
-const AdmZip = require('adm-zip');
+const AdmZip = require('adm-zip'); // ← Use adm-zip instead of archiver
 
 // ─── Single QR ──────────────────────────────────────────────────────
 exports.generateMemberQR = async (req, res) => {
@@ -84,7 +83,7 @@ exports.generateBatchQR = async (req, res) => {
     const members = await prisma.member.findMany({ where, include: { fellowship: true }, orderBy: { fullName: 'asc' } });
     if (members.length === 0) return res.status(404).json({ success: false, message: 'No active members found.' });
 
-    const zip = new AdmZip();
+    const zip = new AdmZip(); // ← Using adm-zip
     const logoPath = path.join(__dirname, '../../assets/fountain.jpg');
 
     for (const member of members) {

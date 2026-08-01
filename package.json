@@ -20,6 +20,8 @@
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^6.19.3",
     "@prisma/config": "^7.9.0",
+    "adm-zip": "^0.5.18",
+    "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

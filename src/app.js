@@ -1,12 +1,8 @@
 // app.js
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const compression = require('compression');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
-const prisma = require('./src/prisma');
+const prisma = require('./prisma');
 require('dotenv').config();
 
 const app = express();
@@ -26,45 +22,13 @@ const allowedOrigins = [
   railwayUrl,
   'https://*.vercel.app',
   'https://*.railway.app',
-  // Add your custom domains here
-  'https://your-church-domain.com',
 ];
-
-// ─── Security Middleware ──────────────────────────────
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-    },
-  },
-}));
-
-// ─── Rate Limiting ─────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Apply rate limiting to all routes
-app.use('/api', limiter);
 
 // ─── CORS Configuration ─────────────────────────────────
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Check if origin is allowed
     const isAllowed = allowedOrigins.some(allowed => {
       if (allowed.includes('*')) {
         const pattern = allowed.replace(/\*/g, '.*');
@@ -87,24 +51,14 @@ app.use(cors({
 }));
 
 // ─── Logging Middleware ────────────────────────────────
-if (isProduction) {
-  app.use(morgan('combined')); // Detailed logs in production
-} else {
-  app.use(morgan('dev')); // Colorful logs in development
-}
-
-// Custom logging middleware (kept from your original)
 app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.url} from ${req.headers.origin || 'same-origin'}`);
+  console.log(`📥 ${req.method} ${req.url}`);
   next();
 });
 
 // ─── Body Parsers ──────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// ─── Compression ──────────────────────────────────────
-app.use(compression());
 
 // ─── Static Files ──────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -146,9 +100,7 @@ app.get('/api/health', async (req, res) => {
       message: 'Fountain HFC API is running!',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      memory: process.memoryUsage(),
       environment: process.env.NODE_ENV || 'development',
-      database: 'Connected',
       stats: { 
         users: userCount, 
         fellowships: fellowshipCount, 
@@ -170,8 +122,6 @@ app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: `Route ${req.method} ${req.path} not found`,
-    path: req.path,
-    method: req.method
   });
 });
 
@@ -185,7 +135,6 @@ app.use((err, req, res, next) => {
       success: false,
       message: 'Foreign key constraint failed',
       error: 'The referenced record does not exist',
-      field: err.meta?.field_name
     });
   }
   
@@ -194,7 +143,6 @@ app.use((err, req, res, next) => {
       success: false,
       message: 'Duplicate entry',
       error: 'A record with this value already exists',
-      field: err.meta?.target
     });
   }
   
@@ -202,7 +150,6 @@ app.use((err, req, res, next) => {
     return res.status(404).json({
       success: false,
       message: 'Record not found',
-      error: err.message
     });
   }
   
@@ -232,7 +179,7 @@ app.use((err, req, res, next) => {
   res.status(statusCode).json({
     success: false,
     message: message,
-    ...(isProduction ? {} : { stack: err.stack, details: err })
+    ...(isProduction ? {} : { stack: err.stack })
   });
 });
 

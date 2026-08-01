@@ -11,12 +11,10 @@ try {
   // ─── Catch uncaught errors ──────────────────────────────
   process.on('uncaughtException', (err) => {
     console.error('❌ Uncaught Exception:', err);
-    // Log to file or monitoring service
   });
 
   process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection:', reason);
-    // Log to file or monitoring service
   });
 
   // ─── Graceful shutdown ──────────────────────────────────
@@ -39,25 +37,12 @@ try {
     console.log(`📊 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
   });
 
-  // ─── Catch server errors ────────────────────────────────
   server.on('error', (err) => {
     console.error('❌ Server error:', err);
     if (err.code === 'EADDRINUSE') {
       console.error(`❌ Port ${PORT} is already in use`);
       process.exit(1);
     }
-  });
-
-  // ─── Keep-alive for Railway ─────────────────────────────
-  // Railway expects the server to respond to health checks
-  app.get('/health', (req, res) => {
-    res.status(200).json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      environment: process.env.NODE_ENV || 'development'
-    });
   });
 
 } catch (error) {

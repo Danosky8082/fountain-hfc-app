@@ -18,7 +18,7 @@ model Fellowship {
   associate     User?    @relation("AssociateRelation", fields: [associateId], references: [id])
   members       Member[]
   sessions      AttendanceSession[]
-  reports       MonthlyReport[]   // 👈 ADD THIS (reverse of MonthlyReport.fellowship)
+  reports       MonthlyReport[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -35,6 +35,7 @@ model User {
   leading       Fellowship? @relation("LeaderRelation")
   assisting     Fellowship? @relation("AssociateRelation")
   submittedSessions AttendanceSession[]
+  otps          OTP[]    // ← Added reverse relation for OTP
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -45,6 +46,7 @@ model Member {
   fullName      String
   phone         String?
   email         String?
+  memberNumber  String?   // ← Added memberNumber field
   qrUniqueId    String   @unique
   isActive      Boolean  @default(true)
 
@@ -92,9 +94,8 @@ model MonthlyReport {
   id            String   @id @default(cuid())
   fellowshipId  String
   fellowship    Fellowship @relation(fields: [fellowshipId], references: [id])
-  monthYear     String   // e.g., "2026-07"
+  monthYear     String
   
-  // Week data (auto-populated from AttendanceSession)
   week1Date     DateTime?
   week2Date     DateTime?
   week3Date     DateTime?
@@ -106,7 +107,6 @@ model MonthlyReport {
   week4Count    Int      @default(0)
   week5Count    Int      @default(0)
   
-  // Form fields (filled by FL)
   prayerFlag    Boolean  @default(false)
   firstTimers   Int      @default(0)
   newMembers    Int      @default(0)
@@ -114,7 +114,6 @@ model MonthlyReport {
   escalations   String?
   comments      String?
   
-  // Status
   status        ReportStatus @default(DRAFT)
   finalizedAt   DateTime?
   finalizedBy   String?
@@ -123,6 +122,19 @@ model MonthlyReport {
   updatedAt     DateTime @updatedAt
 
   @@unique([fellowshipId, monthYear])
+}
+
+model OTP {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  otp           String
+  expiresAt     DateTime
+  used          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 enum ReportStatus {

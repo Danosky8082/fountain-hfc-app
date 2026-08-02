@@ -1,6 +1,50 @@
 // src/controllers/attendanceController.js
 const prisma = require('../prisma');
 
+// ─── Helper: Get the Sunday of the current week ──────────────────
+const getCurrentSunday = () => {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const diff = now.getDate() - day; // Subtract days to get to Sunday
+  const sunday = new Date(now);
+  sunday.setDate(diff);
+  sunday.setHours(0, 0, 0, 0); // Set to midnight
+  return sunday;
+};
+
+// ─── Helper: Get week number based on Sunday date ────────────────
+const getWeekNumber = (date) => {
+  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const firstSunday = new Date(firstDayOfMonth);
+  // Find first Sunday of the month
+  const dayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
+  firstSunday.setDate(firstDayOfMonth.getDate() + (7 - dayOfWeek) % 7);
+  
+  // Calculate week number
+  const diffTime = Math.abs(date.getTime() - firstSunday.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  let week = Math.floor(diffDays / 7) + 1;
+  
+  return Math.min(Math.max(week, 1), 5);
+};
+
+// ─── Helper: Get current week and Sunday date ────────────────────
+const getCurrentWeekInfo = () => {
+  const sunday = getCurrentSunday();
+  const weekNumber = getWeekNumber(sunday);
+  const monthYear = sunday.toISOString().slice(0, 7);
+  
+  console.log(`📅 Current week: ${weekNumber}, Sunday date: ${sunday.toISOString().split('T')[0]}`);
+  
+  return {
+    weekNumber,
+    monthYear,
+    meetingDate: sunday,
+    year: sunday.getFullYear(),
+    month: sunday.getMonth(),
+  };
+};
+
 // ─── Helper: Refresh report counts ──────────────────────────────
 const refreshReportCounts = async (fellowshipId, monthYear) => {
   try {
@@ -29,7 +73,7 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       if (s.weekNumber >= 1 && s.weekNumber <= 5) {
         weekCounts[s.weekNumber] = s.records.length;
         weekDates[s.weekNumber] = s.meetingDate;
-        console.log(`📊 [REFRESH] Week ${s.weekNumber}: ${s.records.length} members present`);
+        console.log(`📊 [REFRESH] Week ${s.weekNumber}: ${s.records.length} members present on ${s.meetingDate}`);
       }
     });
 
@@ -93,18 +137,6 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
   }
 };
 
-// ─── Helper: Get current week ──────────────────────────────────────
-const getCurrentWeek = (date) => {
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
-  // Calculate first Sunday of the month
-  const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfWeek) % 7;
-  // Calculate week number
-  let week = Math.ceil((date.getDate() - firstSunday + 1) / 7);
-  // Ensure week is between 1 and 5
-  return Math.min(Math.max(week, 1), 5);
-};
-
 // ─── Helper: Create submitted session ────────────────────────────
 const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
   return prisma.attendanceSession.create({
@@ -112,7 +144,7 @@ const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meeti
       fellowshipId: fellowshipId,
       weekNumber: weekNumber,
       monthYear: monthYear,
-      meetingDate: meetingDate || new Date(),
+      meetingDate: meetingDate,
       isSubmitted: true,
       submittedAt: new Date(),
       submittedBy: null,
@@ -151,17 +183,18 @@ exports.getOrCreateCurrentSession = async (req, res) => {
       }
     }
 
-    const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7);
-    const currentWeek = getCurrentWeek(now);
+    // ─── Get current week info (Sunday date) ───
+    const weekInfo = getCurrentWeekInfo();
+    const { weekNumber, monthYear, meetingDate } = weekInfo;
 
-    console.log(`📊 [SESSION] Getting session for fellowship ${targetFellowshipId}, week ${currentWeek}, month ${monthYear}`);
+    console.log(`📊 [SESSION] Getting session for fellowship ${targetFellowshipId}`);
+    console.log(`📅 [SESSION] Week ${weekNumber}, Month ${monthYear}, Sunday ${meetingDate.toISOString().split('T')[0]}`);
 
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
+          weekNumber: weekNumber,
           monthYear: monthYear,
         },
       },
@@ -173,13 +206,13 @@ exports.getOrCreateCurrentSession = async (req, res) => {
     });
 
     if (!session) {
-      console.log(`📝 [SESSION] Creating new session for week ${currentWeek}`);
+      console.log(`📝 [SESSION] Creating new session for week ${weekNumber} with meeting date ${meetingDate.toISOString().split('T')[0]}`);
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
+          weekNumber: weekNumber,
           monthYear: monthYear,
-          meetingDate: now,
+          meetingDate: meetingDate,
         },
         include: {
           records: {
@@ -266,30 +299,31 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7);
-    const currentWeek = getCurrentWeek(now);
+    // ─── Get current week info (Sunday date) ───
+    const weekInfo = getCurrentWeekInfo();
+    const { weekNumber, monthYear, meetingDate } = weekInfo;
 
-    console.log(`📊 [MARK] Marking attendance for fellowship ${targetFellowshipId}, week ${currentWeek}`);
+    console.log(`📊 [MARK] Marking attendance for fellowship ${targetFellowshipId}`);
+    console.log(`📅 [MARK] Week ${weekNumber}, Sunday ${meetingDate.toISOString().split('T')[0]}`);
 
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
+          weekNumber: weekNumber,
           monthYear: monthYear,
         },
       },
     });
 
     if (!session) {
-      console.log(`📝 [MARK] Creating new session for week ${currentWeek}`);
+      console.log(`📝 [MARK] Creating new session for week ${weekNumber}`);
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
+          weekNumber: weekNumber,
           monthYear: monthYear,
-          meetingDate: now,
+          meetingDate: meetingDate,
         },
       });
     }
@@ -369,11 +403,13 @@ exports.submitWeek = async (req, res) => {
   try {
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     const force = req.body.force === true;
-    const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7);
-    const currentWeek = getCurrentWeek(now);
+    
+    // ─── Get current week info (Sunday date) ───
+    const weekInfo = getCurrentWeekInfo();
+    const { weekNumber, monthYear, meetingDate } = weekInfo;
 
-    console.log(`📝 [SUBMIT] Submitting week ${currentWeek} for month ${monthYear}`);
+    console.log(`📝 [SUBMIT] Submitting week ${weekNumber} for month ${monthYear}`);
+    console.log(`📅 [SUBMIT] Sunday date: ${meetingDate.toISOString().split('T')[0]}`);
     console.log(`👤 [SUBMIT] User: ${userId}, Role: ${role}`);
 
     let targetFellowshipId = userFellowshipId;
@@ -395,7 +431,7 @@ exports.submitWeek = async (req, res) => {
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
+          weekNumber: weekNumber,
           monthYear: monthYear,
         },
       },
@@ -403,13 +439,13 @@ exports.submitWeek = async (req, res) => {
     });
 
     if (!session) {
-      console.log(`📝 [SUBMIT] Creating new session for week ${currentWeek}`);
+      console.log(`📝 [SUBMIT] Creating new session for week ${weekNumber}`);
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
+          weekNumber: weekNumber,
           monthYear: monthYear,
-          meetingDate: now,
+          meetingDate: meetingDate,
         },
         include: { records: true },
       });
@@ -420,13 +456,13 @@ exports.submitWeek = async (req, res) => {
     if (session.isSubmitted) {
       return res.status(400).json({
         success: false,
-        message: `Week ${currentWeek} has already been submitted.`,
+        message: `Week ${weekNumber} has already been submitted.`,
       });
     }
 
     // Check missing previous weeks
     const missingWeeks = [];
-    for (let week = 1; week < currentWeek; week++) {
+    for (let week = 1; week < weekNumber; week++) {
       const existing = await prisma.attendanceSession.findUnique({
         where: {
           fellowshipId_weekNumber_monthYear: {
@@ -453,10 +489,11 @@ exports.submitWeek = async (req, res) => {
     if (force && missingWeeks.length > 0) {
       console.log(`📝 [SUBMIT] Force submitting with ${missingWeeks.length} missing weeks`);
       for (const week of missingWeeks) {
-        const meetingDate = new Date(now);
-        meetingDate.setDate(now.getDate() - (currentWeek - week) * 7);
-        await createSubmittedSession(targetFellowshipId, week, monthYear, meetingDate);
-        console.log(`✅ [SUBMIT] Auto-created Week ${week} (zero attendance)`);
+        // Calculate the Sunday for the missing week
+        const missingSunday = new Date(meetingDate);
+        missingSunday.setDate(meetingDate.getDate() - (weekNumber - week) * 7);
+        await createSubmittedSession(targetFellowshipId, week, monthYear, missingSunday);
+        console.log(`✅ [SUBMIT] Auto-created Week ${week} (zero attendance) on ${missingSunday.toISOString().split('T')[0]}`);
       }
     }
 
@@ -470,23 +507,27 @@ exports.submitWeek = async (req, res) => {
       },
     });
 
-    console.log(`✅ [SUBMIT] Week ${currentWeek} submitted with ${session.records.length} members`);
+    console.log(`✅ [SUBMIT] Week ${weekNumber} submitted with ${session.records.length} members`);
 
-    // ─── CRITICAL: Refresh report counts after submission ───
+    // ─── Refresh report counts after submission ───
     console.log(`🔄 [SUBMIT] Calling refreshReportCounts for ${targetFellowshipId} - ${monthYear}`);
     await refreshReportCounts(targetFellowshipId, monthYear);
     console.log(`✅ [SUBMIT] Report counts refreshed`);
 
     // ─── Check if this is the last week of the month ───
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const lastWeek = Math.ceil((lastDay.getDate() + (7 - new Date(now.getFullYear(), now.getMonth(), 1).getDay())) / 7);
-    const isLastWeek = currentWeek >= Math.min(lastWeek, 5);
+    const lastDay = new Date(meetingDate.getFullYear(), meetingDate.getMonth() + 1, 0);
+    const lastSunday = new Date(lastDay);
+    const dayOfWeek = lastDay.getDay();
+    lastSunday.setDate(lastDay.getDate() - dayOfWeek);
+    const lastWeekNumber = getWeekNumber(lastSunday);
+    const isLastWeek = weekNumber >= Math.min(lastWeekNumber, 5);
 
     res.status(200).json({
       success: true,
-      message: `✅ Week ${currentWeek} submitted successfully!`,
+      message: `✅ Week ${weekNumber} submitted successfully!`,
       data: {
-        weekNumber: currentWeek,
+        weekNumber: weekNumber,
+        meetingDate: meetingDate,
         totalPresent: session.records.length,
         submittedAt: submitted.submittedAt,
         missingWeeks: missingWeeks,

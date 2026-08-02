@@ -64,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';  // ← Only ref and onMounted needed
 import api from '../services/api';
 import { useAuthStore } from '../stores/auth';
 
@@ -88,24 +88,26 @@ const fetchMembers = async () => {
   if (!selectedFellowshipId.value) return;
   loading.value = true;
   try {
-    // Get all members of this fellowship
-    const res = await api.get(`/admin/fellowship/${selectedFellowshipId.value}/members`); // You may need to create this endpoint
-    // Alternative: use existing /admin/members then filter
     const allRes = await api.get('/admin/members');
-    const filtered = allRes.data.data.filter(m => m.fellowshipId === selectedFellowshipId.value);
-    members.value = filtered.map(m => ({
-      ...m,
-      isPresent: false,
-      checkInMethod: 'MANUAL',
-    }));
-    // Then we need to check if there is an existing session to know who is already present.
-    // We could also have a dedicated endpoint that returns the session records.
-    // For simplicity, we'll let the user check/uncheck as needed.
-  } catch (e) { console.error(e); } finally { loading.value = false; }
+    if (allRes.data.success) {
+      const filtered = allRes.data.data.filter(
+        m => m.fellowshipId === selectedFellowshipId.value
+      );
+      members.value = filtered.map(m => ({
+        ...m,
+        isPresent: false,
+        checkInMethod: 'MANUAL',
+      }));
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    loading.value = false;
+  }
 };
 
 const onChange = (member) => {
-  // Optionally auto‑save or just track state
+  // Optional: auto‑save or just track state
 };
 
 const saveCorrection = async (member) => {

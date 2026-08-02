@@ -64,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';  // ← Only ref and onMounted needed here
 import api from '../services/api';
 import { useAuthStore } from '../stores/auth';
 
@@ -88,10 +88,8 @@ const fetchMembers = async () => {
   if (!selectedFellowshipId.value) return;
   loading.value = true;
   try {
-    // ✅ Use the existing endpoint that returns all members
     const allRes = await api.get('/admin/members');
     if (allRes.data.success) {
-      // Filter members belonging to the selected fellowship
       const filtered = allRes.data.data.filter(
         m => m.fellowshipId === selectedFellowshipId.value
       );

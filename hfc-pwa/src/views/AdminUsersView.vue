@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';  // ← Only ref and onMounted needed
 import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner.vue';
 

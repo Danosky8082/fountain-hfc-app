@@ -4,13 +4,13 @@ const prisma = require('../prisma');
 // ─── Helper: Refresh report counts ──────────────────────────────
 const refreshReportCounts = async (fellowshipId, monthYear) => {
   try {
-    console.log(`🔄 Refreshing report for ${fellowshipId} - ${monthYear}`);
+    console.log(`🔄 [REFRESH] Refreshing report for fellowship ${fellowshipId}, month ${monthYear}`);
     
     // Get all submitted sessions for this fellowship and month
     const sessions = await prisma.attendanceSession.findMany({
       where: {
-        fellowshipId,
-        monthYear,
+        fellowshipId: fellowshipId,
+        monthYear: monthYear,
         isSubmitted: true,
       },
       include: {
@@ -19,7 +19,7 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       orderBy: { weekNumber: 'asc' },
     });
 
-    console.log(`📊 Found ${sessions.length} submitted sessions`);
+    console.log(`📊 [REFRESH] Found ${sessions.length} submitted sessions`);
 
     // Prepare week data
     const weekCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -29,23 +29,25 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       if (s.weekNumber >= 1 && s.weekNumber <= 5) {
         weekCounts[s.weekNumber] = s.records.length;
         weekDates[s.weekNumber] = s.meetingDate;
-        console.log(`📊 Week ${s.weekNumber}: ${s.records.length} members present`);
+        console.log(`📊 [REFRESH] Week ${s.weekNumber}: ${s.records.length} members present`);
       }
     });
+
+    console.log(`📊 [REFRESH] Final week counts:`, weekCounts);
 
     // Find or create monthly report
     let report = await prisma.monthlyReport.findUnique({
       where: {
         fellowshipId_monthYear: {
-          fellowshipId,
-          monthYear,
+          fellowshipId: fellowshipId,
+          monthYear: monthYear,
         },
       },
     });
 
     if (report) {
       // Update existing report
-      console.log(`📝 Updating existing report for ${fellowshipId} - ${monthYear}`);
+      console.log(`📝 [REFRESH] Updating existing report for ${fellowshipId} - ${monthYear}`);
       report = await prisma.monthlyReport.update({
         where: { id: report.id },
         data: {
@@ -63,11 +65,11 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       });
     } else {
       // Create new report
-      console.log(`📝 Creating new report for ${fellowshipId} - ${monthYear}`);
+      console.log(`📝 [REFRESH] Creating new report for ${fellowshipId} - ${monthYear}`);
       report = await prisma.monthlyReport.create({
         data: {
-          fellowshipId,
-          monthYear,
+          fellowshipId: fellowshipId,
+          monthYear: monthYear,
           week1Date: weekDates[1],
           week2Date: weekDates[2],
           week3Date: weekDates[3],
@@ -83,11 +85,10 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       });
     }
 
-    console.log(`✅ Report refreshed successfully!`);
-    console.log(`📊 Week counts: ${JSON.stringify(weekCounts)}`);
+    console.log(`✅ [REFRESH] Report refreshed successfully!`);
     return report;
   } catch (error) {
-    console.error('❌ Error refreshing report counts:', error);
+    console.error('❌ [REFRESH] Error refreshing report counts:', error);
     throw error;
   }
 };
@@ -96,9 +97,27 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
 const getCurrentWeek = (date) => {
   const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
   const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
+  // Calculate first Sunday of the month
   const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfWeek) % 7;
+  // Calculate week number
   let week = Math.ceil((date.getDate() - firstSunday + 1) / 7);
+  // Ensure week is between 1 and 5
   return Math.min(Math.max(week, 1), 5);
+};
+
+// ─── Helper: Create submitted session ────────────────────────────
+const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
+  return prisma.attendanceSession.create({
+    data: {
+      fellowshipId: fellowshipId,
+      weekNumber: weekNumber,
+      monthYear: monthYear,
+      meetingDate: meetingDate || new Date(),
+      isSubmitted: true,
+      submittedAt: new Date(),
+      submittedBy: null,
+    },
+  });
 };
 
 // ─── Get or Create Current Session ──────────────────────────────
@@ -136,12 +155,14 @@ exports.getOrCreateCurrentSession = async (req, res) => {
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
+    console.log(`📊 [SESSION] Getting session for fellowship ${targetFellowshipId}, week ${currentWeek}, month ${monthYear}`);
+
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId: targetFellowshipId,
           weekNumber: currentWeek,
-          monthYear,
+          monthYear: monthYear,
         },
       },
       include: {
@@ -152,11 +173,12 @@ exports.getOrCreateCurrentSession = async (req, res) => {
     });
 
     if (!session) {
+      console.log(`📝 [SESSION] Creating new session for week ${currentWeek}`);
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
           weekNumber: currentWeek,
-          monthYear,
+          monthYear: monthYear,
           meetingDate: now,
         },
         include: {
@@ -165,6 +187,8 @@ exports.getOrCreateCurrentSession = async (req, res) => {
           },
         },
       });
+    } else {
+      console.log(`✅ [SESSION] Found existing session with ${session.records.length} records`);
     }
 
     const allMembers = await prisma.member.findMany({
@@ -208,9 +232,9 @@ exports.getOrCreateCurrentSession = async (req, res) => {
 // ─── Mark Attendance ─────────────────────────────────────────────
 exports.markAttendance = async (req, res) => {
   try {
-    console.log('📝 Mark attendance request received');
-    console.log('📦 Request body:', req.body);
-    console.log('👤 User:', req.user);
+    console.log('📝 [MARK] Mark attendance request received');
+    console.log('📦 [MARK] Request body:', req.body);
+    console.log('👤 [MARK] User:', req.user);
 
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     const { memberId, checkInMethod = 'MANUAL' } = req.body;
@@ -246,22 +270,25 @@ exports.markAttendance = async (req, res) => {
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
+    console.log(`📊 [MARK] Marking attendance for fellowship ${targetFellowshipId}, week ${currentWeek}`);
+
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId: targetFellowshipId,
           weekNumber: currentWeek,
-          monthYear,
+          monthYear: monthYear,
         },
       },
     });
 
     if (!session) {
+      console.log(`📝 [MARK] Creating new session for week ${currentWeek}`);
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
           weekNumber: currentWeek,
-          monthYear,
+          monthYear: monthYear,
           meetingDate: now,
         },
       });
@@ -293,18 +320,18 @@ exports.markAttendance = async (req, res) => {
       where: {
         sessionId_memberId: {
           sessionId: session.id,
-          memberId,
+          memberId: memberId,
         },
       },
       update: {
-        checkInMethod,
+        checkInMethod: checkInMethod,
         checkedInBy: userId,
         checkedInAt: new Date(),
       },
       create: {
         sessionId: session.id,
-        memberId,
-        checkInMethod,
+        memberId: memberId,
+        checkInMethod: checkInMethod,
         checkedInBy: userId,
       },
     });
@@ -312,6 +339,8 @@ exports.markAttendance = async (req, res) => {
     const count = await prisma.attendanceRecord.count({
       where: { sessionId: session.id },
     });
+
+    console.log(`✅ [MARK] Member ${member.fullName} checked in. Total: ${count}`);
 
     res.status(200).json({
       success: true,
@@ -326,7 +355,7 @@ exports.markAttendance = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('❌ Mark Attendance Error:', error);
+    console.error('❌ [MARK] Mark Attendance Error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to mark attendance.',
@@ -344,7 +373,8 @@ exports.submitWeek = async (req, res) => {
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
-    console.log(`📝 Submitting week ${currentWeek} for ${monthYear}`);
+    console.log(`📝 [SUBMIT] Submitting week ${currentWeek} for month ${monthYear}`);
+    console.log(`👤 [SUBMIT] User: ${userId}, Role: ${role}`);
 
     let targetFellowshipId = userFellowshipId;
     if ((role === 'ADMIN' || role === 'HOD') && req.body.fellowshipId) {
@@ -358,29 +388,34 @@ exports.submitWeek = async (req, res) => {
       });
     }
 
+    console.log(`📊 [SUBMIT] Target fellowship: ${targetFellowshipId}`);
+
     // Get or create current session
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
           fellowshipId: targetFellowshipId,
           weekNumber: currentWeek,
-          monthYear,
+          monthYear: monthYear,
         },
       },
       include: { records: true },
     });
 
     if (!session) {
+      console.log(`📝 [SUBMIT] Creating new session for week ${currentWeek}`);
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
           weekNumber: currentWeek,
-          monthYear,
+          monthYear: monthYear,
           meetingDate: now,
         },
         include: { records: true },
       });
     }
+
+    console.log(`📊 [SUBMIT] Session has ${session.records.length} records`);
 
     if (session.isSubmitted) {
       return res.status(400).json({
@@ -397,7 +432,7 @@ exports.submitWeek = async (req, res) => {
           fellowshipId_weekNumber_monthYear: {
             fellowshipId: targetFellowshipId,
             weekNumber: week,
-            monthYear,
+            monthYear: monthYear,
           },
         },
       });
@@ -416,11 +451,12 @@ exports.submitWeek = async (req, res) => {
     }
 
     if (force && missingWeeks.length > 0) {
+      console.log(`📝 [SUBMIT] Force submitting with ${missingWeeks.length} missing weeks`);
       for (const week of missingWeeks) {
         const meetingDate = new Date(now);
         meetingDate.setDate(now.getDate() - (currentWeek - week) * 7);
         await createSubmittedSession(targetFellowshipId, week, monthYear, meetingDate);
-        console.log(`✅ Auto-created Week ${week} (zero attendance)`);
+        console.log(`✅ [SUBMIT] Auto-created Week ${week} (zero attendance)`);
       }
     }
 
@@ -434,11 +470,12 @@ exports.submitWeek = async (req, res) => {
       },
     });
 
-    console.log(`✅ Week ${currentWeek} submitted with ${session.records.length} members`);
+    console.log(`✅ [SUBMIT] Week ${currentWeek} submitted with ${session.records.length} members`);
 
-    // ─── IMPORTANT: Refresh report counts after submission ───
+    // ─── CRITICAL: Refresh report counts after submission ───
+    console.log(`🔄 [SUBMIT] Calling refreshReportCounts for ${targetFellowshipId} - ${monthYear}`);
     await refreshReportCounts(targetFellowshipId, monthYear);
-    console.log(`✅ Report counts refreshed for ${targetFellowshipId} - ${monthYear}`);
+    console.log(`✅ [SUBMIT] Report counts refreshed`);
 
     // ─── Check if this is the last week of the month ───
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -458,26 +495,11 @@ exports.submitWeek = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Submit Week Error:', error);
+    console.error('❌ [SUBMIT] Submit Week Error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to submit week. Please try again.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
-};
-
-// ─── Helper: Create submitted session ────────────────────────────
-const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
-  return prisma.attendanceSession.create({
-    data: {
-      fellowshipId,
-      weekNumber,
-      monthYear,
-      meetingDate: meetingDate || new Date(),
-      isSubmitted: true,
-      submittedAt: new Date(),
-      submittedBy: null,
-    },
-  });
 };

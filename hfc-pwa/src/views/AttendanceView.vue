@@ -106,7 +106,7 @@ const fetchData = async () => {
   }
 };
 
-// ─── Submit Week (No Questions - Just Submit) ───────────────────
+// ─── Submit Week ──────────────────────────────────────────────────
 const submitWeek = async () => {
   if (submitting.value) return;
   submitting.value = true;
@@ -117,33 +117,59 @@ const submitWeek = async () => {
       throw new Error('No fellowship selected.');
     }
 
-    // Check if this is the last week of the month (week 4 or 5)
-    const now = new Date();
-    const currentWeek = session.value.weekNumber;
-    const monthYear = now.toISOString().slice(0, 7);
-    
-    // Find the last week of the month
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const lastWeek = Math.ceil((lastDay.getDate() + (7 - new Date(now.getFullYear(), now.getMonth(), 1).getDay())) / 7);
-    const isLastWeek = currentWeek >= Math.min(lastWeek, 5);
-
-    // Submit the week
     const response = await api.post('/attendance/submit-week', { fellowshipId });
     
     if (response.data.success) {
+      const { isLastWeek, monthYear } = response.data.data;
+      
+      // Show success message
+      alert('✅ Week submitted successfully!');
+      
+      // Refresh the attendance view
+      await fetchData();
+      
       // If this is the last week, redirect to monthly report
       if (isLastWeek) {
-        alert('✅ Week submitted! Please complete the monthly report.');
-        router.push('/report');
-      } else {
-        alert('✅ Week submitted successfully!');
-        await fetchData();
+        const confirmRedirect = confirm(
+          '🎉 This is the last week of the month!\n\n' +
+          'Would you like to complete the monthly report now?\n' +
+          '(This includes pastoral questions and finalizes the month)'
+        );
+        if (confirmRedirect) {
+          router.push('/report');
+        }
       }
     }
   } catch (error) {
     console.error('Error submitting week:', error);
-    const errMsg = error.response?.data?.message || error.message;
-    alert('❌ Error: ' + errMsg);
+    
+    // Check if it's a missing weeks error
+    if (error.response?.data?.missingWeeks) {
+      const missingWeeks = error.response.data.missingWeeks.join(', ');
+      const confirmForce = confirm(
+        `⚠️ You are missing submissions for Week(s) ${missingWeeks}.\n\n` +
+        `Do you want to continue submitting Week ${session.value.weekNumber}?\n` +
+        `Missing weeks will be marked with zero attendance.`
+      );
+      
+      if (confirmForce) {
+        try {
+          const forceResponse = await api.post('/attendance/submit-week', { 
+            fellowshipId, 
+            force: true 
+          });
+          if (forceResponse.data.success) {
+            alert('✅ Week submitted with force! Missing weeks marked as zero.');
+            await fetchData();
+          }
+        } catch (forceError) {
+          alert('❌ Error: ' + (forceError.response?.data?.message || forceError.message));
+        }
+      }
+    } else {
+      const errMsg = error.response?.data?.message || error.message;
+      alert('❌ Error: ' + errMsg);
+    }
   } finally {
     submitting.value = false;
   }

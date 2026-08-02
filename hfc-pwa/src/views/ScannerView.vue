@@ -1,6 +1,9 @@
 <template>
   <div class="container mt-4">
-    <h4>📷 Check-in Options</h4>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>📷 Check-in Options</h4>
+      <button class="btn btn-secondary btn-sm" @click="goBack">← Back</button>
+    </div>
 
     <div v-if="!scanError">
       <p class="text-muted">Point your camera at a member's QR code.</p>
@@ -43,17 +46,19 @@ const scanError = ref(null);
 const manualMemberId = ref('');
 let html5QrCode = null;
 
-// ─── Responsive QR box ──────────────────────────────────────────
+const goBack = () => {
+  stopScanner();
+  router.push('/dashboard');
+};
+
 const qrboxSize = ref(250);
 
 const updateQrboxSize = () => {
   const width = window.innerWidth;
-  // Use 80% of screen width, max 300px, min 200px
   const size = Math.min(Math.max(width * 0.8, 200), 300);
   qrboxSize.value = size;
 };
 
-// ─── Safe cleanup ───────────────────────────────────────────────
 const stopScanner = async () => {
   if (html5QrCode) {
     try {

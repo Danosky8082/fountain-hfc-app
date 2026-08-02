@@ -2,9 +2,12 @@
   <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
       <h4>📋 Manual Check-in</h4>
-      <button class="btn btn-primary btn-sm" @click="showAddMemberModal = true">
-        ➕ Add Member
-      </button>
+      <div>
+        <button class="btn btn-secondary btn-sm me-2" @click="goBack">← Back</button>
+        <button class="btn btn-primary btn-sm" @click="showAddMemberModal = true">
+          ➕ Add Member
+        </button>
+      </div>
     </div>
     <p class="text-muted">Select members present (for those who lost their QR cards).</p>
 
@@ -73,10 +76,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import api from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import LoadingSpinner from '../components/LoadingSpinner.vue';
 
+const router = useRouter();
 const authStore = useAuthStore();
 const loading = ref(true);
 const members = ref([]);
@@ -95,6 +100,10 @@ const memberAddMessage = ref('');
 const memberAddClass = ref('text-success');
 const newMember = ref({ fullName: '', phone: '', email: '', memberNumber: '' });
 
+const goBack = () => {
+  router.push('/dashboard');
+};
+
 const filteredMembers = computed(() => {
   if (!search.value) return members.value;
   return members.value.filter(m => m.fullName.toLowerCase().includes(search.value.toLowerCase()));
@@ -106,7 +115,6 @@ const fetchFellowships = async () => {
     const res = await api.get('/fellowship/list');
     if (res.data.success) {
       fellowships.value = res.data.data;
-      // Auto-select the first one if user is Admin/HOD and no selection yet
       if (isAdminOrHod.value && !selectedFellowshipId.value && fellowships.value.length > 0) {
         selectedFellowshipId.value = fellowships.value[0].id;
       }
@@ -118,7 +126,6 @@ const fetchFellowships = async () => {
 
 // ─── Fetch members ──────────────────────────────────────────────
 const fetchMembers = async () => {
-  // If Admin/HOD and no fellowship selected, don't fetch
   if (isAdminOrHod.value && !selectedFellowshipId.value) {
     loading.value = false;
     return;
@@ -177,7 +184,7 @@ const checkIn = async (memberId) => {
     const res = await api.post('/attendance/mark', { 
       memberId, 
       checkInMethod: 'MANUAL',
-      fellowshipId: fellowshipId // send for Admin/HOD
+      fellowshipId: fellowshipId
     });
     if (res.data.success) {
       const member = members.value.find(m => m.id === memberId);
@@ -247,13 +254,11 @@ onMounted(async () => {
   if (isAdminOrHod.value) {
     await fetchFellowships();
   } else {
-    // For FL/Associate, just use their own fellowship
     selectedFellowshipId.value = authStore.fellowship?.id;
     await fetchMembers();
   }
 });
 
-// Watch selectedFellowshipId for changes (if Admin/HOD)
 watch(selectedFellowshipId, (newVal) => {
   if (isAdminOrHod.value && newVal) {
     fetchMembers();

@@ -1,16 +1,8 @@
 <template>
   <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center">
+    <div class="d-flex justify-content-between align-items-center mb-3">
       <h4>📄 Monthly Report</h4>
-      <button
-        v-if="canReset"
-        class="btn btn-warning"
-        @click="resetToDraft"
-        :disabled="resetting"
-      >
-        <span v-if="resetting" class="spinner-border spinner-border-sm me-2"></span>
-        🔄 Reset to Draft
-      </button>
+      <button class="btn btn-secondary btn-sm" @click="goBack">← Back</button>
     </div>
 
     <div v-if="loading" class="text-center my-5"><LoadingSpinner /></div>
@@ -26,7 +18,7 @@
         </p>
         <hr />
 
-        <h6>Weekly Attendance</h6>
+        <h6>Weekly Attendance Summary</h6>
         <table class="table table-bordered">
           <thead>
             <tr>
@@ -45,7 +37,9 @@
         </table>
         <hr />
 
-        <h6>🙏 Pastoral & Follow-up</h6>
+        <!-- Monthly Pastoral Questions (Only for Monthly Report) -->
+        <h6>🙏 Monthly Pastoral & Follow-up Report</h6>
+        <p class="text-muted">These questions are asked once at the end of the month.</p>
 
         <div class="mb-2">
           <label class="form-label">I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK?</label>
@@ -56,17 +50,17 @@
         </div>
 
         <div class="mb-2">
-          <label class="form-label">First Timers / New Converts</label>
+          <label class="form-label">First Timers / New Converts (Total this month)</label>
           <input v-model.number="form.firstTimers" type="number" class="form-control" min="0" />
         </div>
 
         <div class="mb-2">
-          <label class="form-label">New Members (total)</label>
+          <label class="form-label">New Members (Total this month)</label>
           <input v-model.number="form.newMembers" type="number" class="form-control" min="0" />
         </div>
 
         <div class="mb-2">
-          <label class="form-label">Follow-ups</label>
+          <label class="form-label">Follow-ups (Total this month)</label>
           <input v-model.number="form.followUps" type="number" class="form-control" min="0" />
         </div>
 
@@ -87,11 +81,15 @@
           </button>
           <button class="btn btn-success" @click="saveReport(true)" :disabled="saving || report.status === 'FINALIZED'">
             <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
-            ✅ Finalize Report
+            ✅ Finalize Monthly Report
           </button>
           <button class="btn btn-info" @click="downloadPDF" :disabled="downloading">
             <span v-if="downloading" class="spinner-border spinner-border-sm me-2"></span>
             📄 Download PDF
+          </button>
+          <button class="btn btn-warning" v-if="canReset" @click="resetToDraft" :disabled="resetting">
+            <span v-if="resetting" class="spinner-border spinner-border-sm me-2"></span>
+            🔄 Reset to Draft
           </button>
         </div>
 
@@ -133,6 +131,10 @@ const form = ref({
   comments: '',
 });
 
+const goBack = () => {
+  router.push('/dashboard');
+};
+
 const canReset = computed(() => {
   if (!report.value) return false;
   if (report.value.status !== 'FINALIZED') return false;
@@ -161,12 +163,14 @@ const fetchReport = async () => {
     const res = await api.get(url);
     if (res.data.success) {
       report.value = res.data.data;
-      form.value.prayerFlag = report.value.prayerFlag || false;
-      form.value.firstTimers = report.value.firstTimers || 0;
-      form.value.newMembers = report.value.newMembers || 0;
-      form.value.followUps = report.value.followUps || 0;
-      form.value.escalations = report.value.escalations || '';
-      form.value.comments = report.value.comments || '';
+      if (report.value) {
+        form.value.prayerFlag = report.value.prayerFlag || false;
+        form.value.firstTimers = report.value.firstTimers || 0;
+        form.value.newMembers = report.value.newMembers || 0;
+        form.value.followUps = report.value.followUps || 0;
+        form.value.escalations = report.value.escalations || '';
+        form.value.comments = report.value.comments || '';
+      }
     }
   } catch (error) {
     console.error('Failed to fetch report', error);
@@ -195,7 +199,7 @@ const saveReport = async (finalize) => {
     const res = await api.put(`/reports/${report.value.id}`, payload);
     if (res.data.success) {
       const successMsg = finalize
-        ? '✅ Report finalized successfully! Emails have been sent to HODs.'
+        ? '✅ Monthly report finalized successfully! HODs have been notified.'
         : '💾 Draft saved!';
       message.value = successMsg;
       messageClass.value = 'text-success';

@@ -4,12 +4,18 @@ const router = express.Router();
 const attendanceController = require('../controllers/attendanceController');
 const { verifyToken } = require('../middlewares/authMiddleware');
 
-// All routes require authentication
+// ─── All routes require authentication ───
 router.use(verifyToken);
 
 // ─── Routes ──────────────────────────────────────────────────
+// Get current session (GET)
 router.get('/current-session', attendanceController.getOrCreateCurrentSession);
-router.post('/mark', attendanceController.markAttendance);  // ← This should be POST
+
+// Mark attendance (POST) - THIS IS THE ROUTE THAT'S MISSING
+router.post('/mark', attendanceController.markAttendance);
+
+// Submit week (POST)
 router.post('/submit-week', attendanceController.submitWeek);
 
+// ─── Export the router ───
 module.exports = router;

@@ -8,32 +8,16 @@ const getCurrentWeek = (date) => {
   return Math.min(Math.max(week, 1), 5);
 };
 
-const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
-  return prisma.attendanceSession.create({
-    data: {
-      fellowshipId,
-      weekNumber,
-      monthYear,
-      meetingDate: meetingDate || new Date(),
-      isSubmitted: true,
-      submittedAt: new Date(),
-      submittedBy: null,
-    },
-  });
-};
-
 // ─── Get or Create Current Session ──────────────────────────────
 exports.getOrCreateCurrentSession = async (req, res) => {
   try {
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     let targetFellowshipId = userFellowshipId;
 
-    // If user is ADMIN or HOD, allow overriding with query param
     if ((role === 'ADMIN' || role === 'HOD') && req.query.fellowshipId) {
       targetFellowshipId = req.query.fellowshipId;
     }
 
-    // Check if we have a valid fellowship ID
     if (!targetFellowshipId) {
       return res.status(400).json({
         success: false,
@@ -41,7 +25,6 @@ exports.getOrCreateCurrentSession = async (req, res) => {
       });
     }
 
-    // For non-Admin/HOD, verify they have access to that fellowship
     if (role !== 'ADMIN' && role !== 'HOD') {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -60,7 +43,6 @@ exports.getOrCreateCurrentSession = async (req, res) => {
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
-    // Find or create session
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
@@ -92,13 +74,11 @@ exports.getOrCreateCurrentSession = async (req, res) => {
       });
     }
 
-    // Get all active members of this fellowship
     const allMembers = await prisma.member.findMany({
       where: { fellowshipId: targetFellowshipId, isActive: true },
       orderBy: { fullName: 'asc' },
     });
 
-    // Map attendance status
     const memberStatus = allMembers.map((member) => {
       const record = session.records.find((r) => r.memberId === member.id);
       return {
@@ -135,13 +115,14 @@ exports.getOrCreateCurrentSession = async (req, res) => {
 // ─── Mark Attendance ─────────────────────────────────────────────
 exports.markAttendance = async (req, res) => {
   try {
-    console.log('📝 Mark attendance request:', req.body);
+    console.log('📝 Mark attendance request received');
+    console.log('📦 Request body:', req.body);
     console.log('👤 User:', req.user);
 
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     const { memberId, checkInMethod = 'MANUAL' } = req.body;
 
-    // ─── FIX: Validate memberId ───
+    // ─── Validate required fields ───
     if (!memberId) {
       return res.status(400).json({
         success: false,
@@ -149,7 +130,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ─── FIX: Validate checkInMethod ───
+    // ─── Validate check-in method ───
     const validMethods = ['QR_SCAN', 'MANUAL', 'VIRTUAL', 'PIN_CHECKIN'];
     if (!validMethods.includes(checkInMethod)) {
       return res.status(400).json({
@@ -158,7 +139,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ─── FIX: Determine which fellowship to use ───
+    // ─── Determine which fellowship to use ───
     let targetFellowshipId = userFellowshipId;
     if ((role === 'ADMIN' || role === 'HOD') && req.body.fellowshipId) {
       targetFellowshipId = req.body.fellowshipId;
@@ -171,12 +152,12 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ─── FIX: Get current week ───
+    // ─── Get current week ───
     const now = new Date();
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
-    // ─── FIX: Find or create session ───
+    // ─── Find or create session ───
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
@@ -198,7 +179,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ─── FIX: Check if session is already submitted ───
+    // ─── Check if session is already submitted ───
     if (session.isSubmitted) {
       return res.status(400).json({
         success: false,
@@ -206,7 +187,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ─── FIX: Verify member exists and belongs to this fellowship ───
+    // ─── Verify member exists and belongs to this fellowship ───
     const member = await prisma.member.findFirst({
       where: {
         id: memberId,
@@ -222,7 +203,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // ─── FIX: Upsert attendance record ───
+    // ─── Upsert attendance record ───
     const record = await prisma.attendanceRecord.upsert({
       where: {
         sessionId_memberId: {
@@ -243,21 +224,25 @@ exports.markAttendance = async (req, res) => {
       },
     });
 
-    // ─── FIX: Get total present count ───
+    // ─── Get total present count ───
     const count = await prisma.attendanceRecord.count({
       where: { sessionId: session.id },
     });
 
     res.status(200).json({
       success: true,
-      message: 'Member checked in successfully.',
+      message: '✅ Member checked in successfully!',
       data: {
         record,
         totalPresent: count,
+        member: {
+          id: member.id,
+          fullName: member.fullName,
+        },
       },
     });
   } catch (error) {
-    console.error('Mark Attendance Error:', error);
+    console.error('❌ Mark Attendance Error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to mark attendance.',
@@ -344,15 +329,7 @@ exports.submitWeek = async (req, res) => {
       });
     }
 
-    if (force && missingWeeks.length > 0) {
-      for (const week of missingWeeks) {
-        const meetingDate = new Date(now);
-        meetingDate.setDate(now.getDate() - (currentWeek - week) * 7);
-        await createSubmittedSession(targetFellowshipId, week, monthYear, meetingDate);
-        console.log(`✅ Auto-created Week ${week} (zero attendance)`);
-      }
-    }
-
+    // Submit the week
     const submitted = await prisma.attendanceSession.update({
       where: { id: session.id },
       data: {
@@ -364,13 +341,12 @@ exports.submitWeek = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `✅ Week ${currentWeek} submitted successfully!` +
-        (missingWeeks.length > 0 ? ` Missing weeks ${missingWeeks.join(', ')} were auto‑created with zero attendance.` : ''),
+      message: `✅ Week ${currentWeek} submitted successfully!`,
       data: {
         weekNumber: currentWeek,
         totalPresent: session.records.length,
         submittedAt: submitted.submittedAt,
-        autoCreatedWeeks: missingWeeks,
+        missingWeeks: missingWeeks,
       },
     });
   } catch (error) {

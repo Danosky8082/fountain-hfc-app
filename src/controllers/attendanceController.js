@@ -1,360 +1,199 @@
-const prisma = require('../prisma');
+<template>
+  <div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>📊 Current Week Attendance</h4>
+      <button class="btn btn-secondary btn-sm" @click="goBack">← Back</button>
+    </div>
 
-// ─── Helpers ──────────────────────────────────────────────────────
-const getCurrentWeek = (date) => {
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfMonth.getDay()) % 7;
-  let week = Math.ceil((date.getDate() - firstSunday + 1) / 7);
-  return Math.min(Math.max(week, 1), 5);
+    <!-- Fellowship selector for Admin/HOD -->
+    <div v-if="isAdminOrHod" class="mb-3">
+      <label class="form-label">Select Fellowship</label>
+      <select v-model="selectedFellowshipId" class="form-control" @change="onFellowshipChange">
+        <option v-for="f in fellowships" :key="f.id" :value="f.id">{{ f.name }}</option>
+      </select>
+    </div>
+
+    <div v-if="loading" class="text-center"><LoadingSpinner /></div>
+    <div v-else-if="session">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5>Week {{ session.weekNumber }} – {{ session.meetingDate }}</h5>
+          <p>Total Present: <strong>{{ session.totalPresent }}</strong></p>
+          <button
+            :disabled="session.isSubmitted"
+            class="btn btn-success"
+            @click="submitWeek"
+          >
+            {{ session.isSubmitted ? '✅ Submitted' : 'Submit Week' }}
+          </button>
+          <span v-if="submitting" class="ms-2 spinner-border spinner-border-sm"></span>
+        </div>
+      </div>
+      <div class="list-group">
+        <div v-for="member in members" :key="member.id" class="list-group-item d-flex justify-content-between">
+          <span>{{ member.fullName }}</span>
+          <span v-if="member.isPresent" class="badge bg-success">✅ Present</span>
+          <span v-else class="badge bg-secondary">Absent</span>
+        </div>
+      </div>
+    </div>
+    <div v-else class="alert alert-info">No active session found. Scan members to start one.</div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, watch, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import api from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner.vue';
+import { useAuthStore } from '../stores/auth';
+
+const router = useRouter();
+const authStore = useAuthStore();
+const loading = ref(true);
+const session = ref(null);
+const members = ref([]);
+const submitting = ref(false);
+
+// Fellowship selector (for Admin/HOD)
+const fellowships = ref([]);
+const selectedFellowshipId = ref(null);
+const isAdminOrHod = computed(() => authStore.user?.role === 'ADMIN' || authStore.user?.role === 'HOD');
+
+const goBack = () => {
+  router.push('/dashboard');
 };
 
-// ─── Get or Create Current Session ──────────────────────────────
-exports.getOrCreateCurrentSession = async (req, res) => {
+// ─── Fetch fellowships (for Admin/HOD) ──────────────────────────
+const fetchFellowships = async () => {
   try {
-    const { fellowshipId: userFellowshipId, userId, role } = req.user;
-    let targetFellowshipId = userFellowshipId;
-
-    if ((role === 'ADMIN' || role === 'HOD') && req.query.fellowshipId) {
-      targetFellowshipId = req.query.fellowshipId;
-    }
-
-    if (!targetFellowshipId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No fellowship selected. Please choose a fellowship.',
-      });
-    }
-
-    if (role !== 'ADMIN' && role !== 'HOD') {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { leading: { select: { id: true } }, assisting: { select: { id: true } } },
-      });
-      const allowedFellowshipIds = [user?.leading?.id, user?.assisting?.id].filter(Boolean);
-      if (!allowedFellowshipIds.includes(targetFellowshipId)) {
-        return res.status(403).json({
-          success: false,
-          message: 'You are not authorized to view attendance for this fellowship.',
-        });
+    const res = await api.get('/fellowship/list');
+    if (res.data.success) {
+      fellowships.value = res.data.data;
+      if (isAdminOrHod.value && !selectedFellowshipId.value && fellowships.value.length > 0) {
+        selectedFellowshipId.value = fellowships.value[0].id;
       }
     }
-
-    const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7);
-    const currentWeek = getCurrentWeek(now);
-
-    let session = await prisma.attendanceSession.findUnique({
-      where: {
-        fellowshipId_weekNumber_monthYear: {
-          fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
-          monthYear,
-        },
-      },
-      include: {
-        records: {
-          include: { member: true },
-        },
-      },
-    });
-
-    if (!session) {
-      session = await prisma.attendanceSession.create({
-        data: {
-          fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
-          monthYear,
-          meetingDate: now,
-        },
-        include: {
-          records: {
-            include: { member: true },
-          },
-        },
-      });
-    }
-
-    const allMembers = await prisma.member.findMany({
-      where: { fellowshipId: targetFellowshipId, isActive: true },
-      orderBy: { fullName: 'asc' },
-    });
-
-    const memberStatus = allMembers.map((member) => {
-      const record = session.records.find((r) => r.memberId === member.id);
-      return {
-        ...member,
-        isPresent: !!record,
-        checkInMethod: record?.checkInMethod || null,
-        checkedInAt: record?.checkedInAt || null,
-      };
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        session: {
-          id: session.id,
-          weekNumber: session.weekNumber,
-          meetingDate: session.meetingDate,
-          isSubmitted: session.isSubmitted,
-        },
-        members: memberStatus,
-        totalPresent: session.records.length,
-      },
-    });
   } catch (error) {
-    console.error('Get Session Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get current attendance session.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Failed to fetch fellowships', error);
   }
 };
 
-// ─── Mark Attendance ─────────────────────────────────────────────
-exports.markAttendance = async (req, res) => {
+// ─── Fetch data ──────────────────────────────────────────────────
+const fetchData = async () => {
+  if (isAdminOrHod.value && !selectedFellowshipId.value) {
+    loading.value = false;
+    return;
+  }
+
+  let fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
+  if (!fellowshipId) {
+    loading.value = false;
+    return;
+  }
+
   try {
-    console.log('📝 Mark attendance request received');
-    console.log('📦 Request body:', req.body);
-    console.log('👤 User:', req.user);
-
-    const { fellowshipId: userFellowshipId, userId, role } = req.user;
-    const { memberId, checkInMethod = 'MANUAL' } = req.body;
-
-    // ─── Validate required fields ───
-    if (!memberId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Member ID is required.',
-      });
+    const url = `/attendance/current-session?fellowshipId=${fellowshipId}`;
+    const res = await api.get(url);
+    if (res.data.success) {
+      session.value = res.data.data.session;
+      members.value = res.data.data.members || [];
     }
-
-    // ─── Validate check-in method ───
-    const validMethods = ['QR_SCAN', 'MANUAL', 'VIRTUAL', 'PIN_CHECKIN'];
-    if (!validMethods.includes(checkInMethod)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid check-in method. Use one of: ${validMethods.join(', ')}`,
-      });
-    }
-
-    // ─── Determine which fellowship to use ───
-    let targetFellowshipId = userFellowshipId;
-    if ((role === 'ADMIN' || role === 'HOD') && req.body.fellowshipId) {
-      targetFellowshipId = req.body.fellowshipId;
-    }
-
-    if (!targetFellowshipId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No fellowship selected. Please choose a fellowship.',
-      });
-    }
-
-    // ─── Get current week ───
-    const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7);
-    const currentWeek = getCurrentWeek(now);
-
-    // ─── Find or create session ───
-    let session = await prisma.attendanceSession.findUnique({
-      where: {
-        fellowshipId_weekNumber_monthYear: {
-          fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
-          monthYear,
-        },
-      },
-    });
-
-    if (!session) {
-      session = await prisma.attendanceSession.create({
-        data: {
-          fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
-          monthYear,
-          meetingDate: now,
-        },
-      });
-    }
-
-    // ─── Check if session is already submitted ───
-    if (session.isSubmitted) {
-      return res.status(400).json({
-        success: false,
-        message: 'This week has already been submitted. Cannot modify attendance.',
-      });
-    }
-
-    // ─── Verify member exists and belongs to this fellowship ───
-    const member = await prisma.member.findFirst({
-      where: {
-        id: memberId,
-        fellowshipId: targetFellowshipId,
-        isActive: true,
-      },
-    });
-
-    if (!member) {
-      return res.status(404).json({
-        success: false,
-        message: 'Member not found or not active in your fellowship.',
-      });
-    }
-
-    // ─── Upsert attendance record ───
-    const record = await prisma.attendanceRecord.upsert({
-      where: {
-        sessionId_memberId: {
-          sessionId: session.id,
-          memberId,
-        },
-      },
-      update: {
-        checkInMethod,
-        checkedInBy: userId,
-        checkedInAt: new Date(),
-      },
-      create: {
-        sessionId: session.id,
-        memberId,
-        checkInMethod,
-        checkedInBy: userId,
-      },
-    });
-
-    // ─── Get total present count ───
-    const count = await prisma.attendanceRecord.count({
-      where: { sessionId: session.id },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: '✅ Member checked in successfully!',
-      data: {
-        record,
-        totalPresent: count,
-        member: {
-          id: member.id,
-          fullName: member.fullName,
-        },
-      },
-    });
   } catch (error) {
-    console.error('❌ Mark Attendance Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to mark attendance.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error(error);
+  } finally {
+    loading.value = false;
   }
 };
 
 // ─── Submit Week ──────────────────────────────────────────────────
-exports.submitWeek = async (req, res) => {
+const submitWeek = async () => {
+  if (submitting.value) return;
+  submitting.value = true;
+
   try {
-    const { fellowshipId: userFellowshipId, userId, role } = req.user;
-    const force = req.body.force === true;
-    const now = new Date();
-    const monthYear = now.toISOString().slice(0, 7);
-    const currentWeek = getCurrentWeek(now);
-
-    let targetFellowshipId = userFellowshipId;
-    if ((role === 'ADMIN' || role === 'HOD') && req.body.fellowshipId) {
-      targetFellowshipId = req.body.fellowshipId;
+    let fellowshipId = selectedFellowshipId.value || authStore.fellowship?.id;
+    if (!fellowshipId) {
+      throw new Error('No fellowship selected.');
     }
 
-    if (!targetFellowshipId) {
-      return res.status(400).json({
-        success: false,
-        message: 'No fellowship selected. Please choose a fellowship.',
-      });
-    }
-
-    // Get or create current session
-    let session = await prisma.attendanceSession.findUnique({
-      where: {
-        fellowshipId_weekNumber_monthYear: {
-          fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
-          monthYear,
-        },
-      },
-      include: { records: true },
-    });
-
-    if (!session) {
-      session = await prisma.attendanceSession.create({
-        data: {
-          fellowshipId: targetFellowshipId,
-          weekNumber: currentWeek,
-          monthYear,
-          meetingDate: now,
-        },
-        include: { records: true },
-      });
-    }
-
-    if (session.isSubmitted) {
-      return res.status(400).json({
-        success: false,
-        message: `Week ${currentWeek} has already been submitted.`,
-      });
-    }
-
-    // Check missing previous weeks
-    const missingWeeks = [];
-    for (let week = 1; week < currentWeek; week++) {
-      const existing = await prisma.attendanceSession.findUnique({
-        where: {
-          fellowshipId_weekNumber_monthYear: {
-            fellowshipId: targetFellowshipId,
-            weekNumber: week,
-            monthYear,
-          },
-        },
-      });
-      if (!existing || !existing.isSubmitted) {
-        missingWeeks.push(week);
+    const response = await api.post('/attendance/submit-week', { fellowshipId });
+    
+    if (response.data.success) {
+      const { isLastWeek, monthYear } = response.data.data;
+      
+      // Show success message
+      alert('✅ Week submitted successfully!');
+      
+      // Refresh the attendance view
+      await fetchData();
+      
+      // If this is the last week, redirect to monthly report
+      if (isLastWeek) {
+        const confirmRedirect = confirm(
+          '🎉 This is the last week of the month!\n\n' +
+          'Would you like to complete the monthly report now?\n' +
+          '(This includes pastoral questions and finalizes the month)'
+        );
+        if (confirmRedirect) {
+          router.push('/report');
+        }
       }
     }
-
-    if (missingWeeks.length > 0 && !force) {
-      return res.status(400).json({
-        success: false,
-        message: `You are missing submissions for Week(s) ${missingWeeks.join(', ')}. Please review them or force submit.`,
-        missingWeeks,
-        canForce: true,
-      });
-    }
-
-    // Submit the week
-    const submitted = await prisma.attendanceSession.update({
-      where: { id: session.id },
-      data: {
-        isSubmitted: true,
-        submittedAt: new Date(),
-        submittedBy: userId,
-      },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: `✅ Week ${currentWeek} submitted successfully!`,
-      data: {
-        weekNumber: currentWeek,
-        totalPresent: session.records.length,
-        submittedAt: submitted.submittedAt,
-        missingWeeks: missingWeeks,
-      },
-    });
   } catch (error) {
-    console.error('Submit Week Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to submit week. Please try again.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Error submitting week:', error);
+    
+    // Check if it's a missing weeks error
+    if (error.response?.data?.missingWeeks) {
+      const missingWeeks = error.response.data.missingWeeks.join(', ');
+      const confirmForce = confirm(
+        `⚠️ You are missing submissions for Week(s) ${missingWeeks}.\n\n` +
+        `Do you want to continue submitting Week ${session.value.weekNumber}?\n` +
+        `Missing weeks will be marked with zero attendance.`
+      );
+      
+      if (confirmForce) {
+        try {
+          const forceResponse = await api.post('/attendance/submit-week', { 
+            fellowshipId, 
+            force: true 
+          });
+          if (forceResponse.data.success) {
+            alert('✅ Week submitted with force! Missing weeks marked as zero.');
+            await fetchData();
+          }
+        } catch (forceError) {
+          alert('❌ Error: ' + (forceError.response?.data?.message || forceError.message));
+        }
+      }
+    } else {
+      const errMsg = error.response?.data?.message || error.message;
+      alert('❌ Error: ' + errMsg);
+    }
+  } finally {
+    submitting.value = false;
   }
 };
+
+// ─── Watch for fellowship change ──────────────────────────────
+const onFellowshipChange = () => {
+  if (selectedFellowshipId.value) {
+    fetchData();
+  }
+};
+
+onMounted(async () => {
+  if (isAdminOrHod.value) {
+    await fetchFellowships();
+  } else {
+    selectedFellowshipId.value = authStore.fellowship?.id;
+    await fetchData();
+  }
+});
+
+watch(selectedFellowshipId, (newVal) => {
+  if (isAdminOrHod.value && newVal) {
+    fetchData();
+  }
+});
+</script>

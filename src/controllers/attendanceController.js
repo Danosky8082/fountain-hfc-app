@@ -33,7 +33,7 @@ exports.getOrCreateCurrentSession = async (req, res) => {
       targetFellowshipId = req.query.fellowshipId;
     }
 
-    // ✅ Check if we have a valid fellowship ID
+    // Check if we have a valid fellowship ID
     if (!targetFellowshipId) {
       return res.status(400).json({
         success: false,
@@ -127,6 +127,7 @@ exports.getOrCreateCurrentSession = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get current attendance session.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -134,9 +135,13 @@ exports.getOrCreateCurrentSession = async (req, res) => {
 // ─── Mark Attendance ─────────────────────────────────────────────
 exports.markAttendance = async (req, res) => {
   try {
+    console.log('📝 Mark attendance request:', req.body);
+    console.log('👤 User:', req.user);
+
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     const { memberId, checkInMethod = 'MANUAL' } = req.body;
 
+    // ─── FIX: Validate memberId ───
     if (!memberId) {
       return res.status(400).json({
         success: false,
@@ -144,6 +149,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
+    // ─── FIX: Validate checkInMethod ───
     const validMethods = ['QR_SCAN', 'MANUAL', 'VIRTUAL', 'PIN_CHECKIN'];
     if (!validMethods.includes(checkInMethod)) {
       return res.status(400).json({
@@ -152,7 +158,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // Determine which fellowship to use
+    // ─── FIX: Determine which fellowship to use ───
     let targetFellowshipId = userFellowshipId;
     if ((role === 'ADMIN' || role === 'HOD') && req.body.fellowshipId) {
       targetFellowshipId = req.body.fellowshipId;
@@ -165,10 +171,12 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
+    // ─── FIX: Get current week ───
     const now = new Date();
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
+    // ─── FIX: Find or create session ───
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
@@ -190,6 +198,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
+    // ─── FIX: Check if session is already submitted ───
     if (session.isSubmitted) {
       return res.status(400).json({
         success: false,
@@ -197,7 +206,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // Verify member belongs to this fellowship
+    // ─── FIX: Verify member exists and belongs to this fellowship ───
     const member = await prisma.member.findFirst({
       where: {
         id: memberId,
@@ -213,6 +222,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
+    // ─── FIX: Upsert attendance record ───
     const record = await prisma.attendanceRecord.upsert({
       where: {
         sessionId_memberId: {
@@ -233,6 +243,7 @@ exports.markAttendance = async (req, res) => {
       },
     });
 
+    // ─── FIX: Get total present count ───
     const count = await prisma.attendanceRecord.count({
       where: { sessionId: session.id },
     });
@@ -250,6 +261,7 @@ exports.markAttendance = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to mark attendance.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -366,6 +378,7 @@ exports.submitWeek = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to submit week. Please try again.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

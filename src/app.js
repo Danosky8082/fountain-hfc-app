@@ -76,7 +76,7 @@ const userRoutes = require('./routes/userRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/fellowship', fellowshipRoutes);
-app.use('/api/attendance', attendanceRoutes);
+app.use('/api/attendance', attendanceRoutes); 
 app.use('/api/reports', reportRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/admin', adminRoutes);

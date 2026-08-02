@@ -4,6 +4,8 @@ const prisma = require('../prisma');
 // ─── Helper: Refresh report counts ──────────────────────────────
 const refreshReportCounts = async (fellowshipId, monthYear) => {
   try {
+    console.log(`🔄 Refreshing report for ${fellowshipId} - ${monthYear}`);
+    
     // Get all submitted sessions for this fellowship and month
     const sessions = await prisma.attendanceSession.findMany({
       where: {
@@ -17,6 +19,8 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       orderBy: { weekNumber: 'asc' },
     });
 
+    console.log(`📊 Found ${sessions.length} submitted sessions`);
+
     // Prepare week data
     const weekCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const weekDates = { 1: null, 2: null, 3: null, 4: null, 5: null };
@@ -25,6 +29,7 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       if (s.weekNumber >= 1 && s.weekNumber <= 5) {
         weekCounts[s.weekNumber] = s.records.length;
         weekDates[s.weekNumber] = s.meetingDate;
+        console.log(`📊 Week ${s.weekNumber}: ${s.records.length} members present`);
       }
     });
 
@@ -40,6 +45,7 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
 
     if (report) {
       // Update existing report
+      console.log(`📝 Updating existing report for ${fellowshipId} - ${monthYear}`);
       report = await prisma.monthlyReport.update({
         where: { id: report.id },
         data: {
@@ -57,6 +63,7 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       });
     } else {
       // Create new report
+      console.log(`📝 Creating new report for ${fellowshipId} - ${monthYear}`);
       report = await prisma.monthlyReport.create({
         data: {
           fellowshipId,
@@ -76,34 +83,22 @@ const refreshReportCounts = async (fellowshipId, monthYear) => {
       });
     }
 
-    console.log(`✅ Report refreshed for ${fellowshipId} - ${monthYear}`);
+    console.log(`✅ Report refreshed successfully!`);
+    console.log(`📊 Week counts: ${JSON.stringify(weekCounts)}`);
     return report;
   } catch (error) {
-    console.error('Error refreshing report counts:', error);
+    console.error('❌ Error refreshing report counts:', error);
     throw error;
   }
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────
+// ─── Helper: Get current week ──────────────────────────────────────
 const getCurrentWeek = (date) => {
   const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfMonth.getDay()) % 7;
+  const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
+  const firstSunday = firstDayOfMonth.getDate() + (7 - firstDayOfWeek) % 7;
   let week = Math.ceil((date.getDate() - firstSunday + 1) / 7);
   return Math.min(Math.max(week, 1), 5);
-};
-
-const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
-  return prisma.attendanceSession.create({
-    data: {
-      fellowshipId,
-      weekNumber,
-      monthYear,
-      meetingDate: meetingDate || new Date(),
-      isSubmitted: true,
-      submittedAt: new Date(),
-      submittedBy: null,
-    },
-  });
 };
 
 // ─── Get or Create Current Session ──────────────────────────────
@@ -349,6 +344,8 @@ exports.submitWeek = async (req, res) => {
     const monthYear = now.toISOString().slice(0, 7);
     const currentWeek = getCurrentWeek(now);
 
+    console.log(`📝 Submitting week ${currentWeek} for ${monthYear}`);
+
     let targetFellowshipId = userFellowshipId;
     if ((role === 'ADMIN' || role === 'HOD') && req.body.fellowshipId) {
       targetFellowshipId = req.body.fellowshipId;
@@ -437,7 +434,9 @@ exports.submitWeek = async (req, res) => {
       },
     });
 
-    // ─── FIX: Refresh report counts after submission ───
+    console.log(`✅ Week ${currentWeek} submitted with ${session.records.length} members`);
+
+    // ─── IMPORTANT: Refresh report counts after submission ───
     await refreshReportCounts(targetFellowshipId, monthYear);
     console.log(`✅ Report counts refreshed for ${targetFellowshipId} - ${monthYear}`);
 
@@ -466,4 +465,19 @@ exports.submitWeek = async (req, res) => {
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
+};
+
+// ─── Helper: Create submitted session ────────────────────────────
+const createSubmittedSession = async (fellowshipId, weekNumber, monthYear, meetingDate) => {
+  return prisma.attendanceSession.create({
+    data: {
+      fellowshipId,
+      weekNumber,
+      monthYear,
+      meetingDate: meetingDate || new Date(),
+      isSubmitted: true,
+      submittedAt: new Date(),
+      submittedBy: null,
+    },
+  });
 };

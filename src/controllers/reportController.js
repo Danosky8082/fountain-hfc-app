@@ -203,7 +203,8 @@ exports.getCurrentReport = async (req, res) => {
   try {
     const { fellowshipId, userId, role } = req.user;
     
-    // ─── FIX: Check if user has a fellowship ───
+    console.log(`📊 Getting report for fellowship ${fellowshipId}`);
+    
     if (!fellowshipId && role !== 'ADMIN' && role !== 'HOD') {
       return res.status(400).json({ 
         success: false, 
@@ -214,7 +215,6 @@ exports.getCurrentReport = async (req, res) => {
     const now = new Date();
     const monthYear = now.toISOString().slice(0, 7);
 
-    // ─── FIX: Handle case where fellowshipId might be null ───
     let report = null;
     if (fellowshipId) {
       report = await prisma.monthlyReport.findUnique({
@@ -224,11 +224,22 @@ exports.getCurrentReport = async (req, res) => {
             monthYear,
           },
         },
+        include: {
+          fellowship: {
+            include: {
+              leader: true,
+              associate: true,
+            },
+          },
+        },
       });
     }
 
-    // ─── FIX: If no report exists, create one ───
+    // ─── FIX: If no report exists, create one with counts from submitted sessions ───
     if (!report && fellowshipId) {
+      console.log(`📝 No report found, creating one for ${fellowshipId} - ${monthYear}`);
+      
+      // Get all submitted sessions
       const sessions = await prisma.attendanceSession.findMany({
         where: {
           fellowshipId,
@@ -239,11 +250,17 @@ exports.getCurrentReport = async (req, res) => {
         orderBy: { weekNumber: 'asc' },
       });
 
+      console.log(`📊 Found ${sessions.length} submitted sessions`);
+
       const weekCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
       const weekDates = { 1: null, 2: null, 3: null, 4: null, 5: null };
+      
       sessions.forEach((s) => {
-        weekCounts[s.weekNumber] = s.records.length;
-        weekDates[s.weekNumber] = s.meetingDate;
+        if (s.weekNumber >= 1 && s.weekNumber <= 5) {
+          weekCounts[s.weekNumber] = s.records.length;
+          weekDates[s.weekNumber] = s.meetingDate;
+          console.log(`📊 Week ${s.weekNumber}: ${s.records.length} members`);
+        }
       });
 
       report = await prisma.monthlyReport.create({
@@ -262,10 +279,19 @@ exports.getCurrentReport = async (req, res) => {
           week5Count: weekCounts[5],
           status: 'DRAFT',
         },
+        include: {
+          fellowship: {
+            include: {
+              leader: true,
+              associate: true,
+            },
+          },
+        },
       });
+      
+      console.log(`✅ Report created with counts: ${JSON.stringify(weekCounts)}`);
     }
 
-    // ─── FIX: If no fellowshipId, return empty report ───
     if (!report) {
       return res.status(200).json({ 
         success: true, 
@@ -274,19 +300,7 @@ exports.getCurrentReport = async (req, res) => {
       });
     }
 
-    const fullReport = await prisma.monthlyReport.findUnique({
-      where: { id: report.id },
-      include: {
-        fellowship: {
-          include: {
-            leader: true,
-            associate: true,
-          },
-        },
-      },
-    });
-
-    res.status(200).json({ success: true, data: fullReport });
+    res.status(200).json({ success: true, data: report });
   } catch (error) {
     console.error('Get Report Error:', error);
     res.status(500).json({ 

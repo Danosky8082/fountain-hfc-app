@@ -80,17 +80,18 @@ const generatePDFBuffer = async (reportId) => {
   const leftMargin = 50;
   let y = 50;
 
-  // ─── Logo Section ──────────────────────────────────────────────
+  // ─── Logo Section (Top-Left Corner) ──────────────────────────
   try {
     const logoPath = path.join(__dirname, '../../assets/fountain.jpg');
     
     if (fs.existsSync(logoPath)) {
-      const logoWidth = 80;
-      const logoHeight = 80;
-      const logoX = (doc.page.width - logoWidth) / 2;
+      const logoWidth = 70;
+      const logoHeight = 70;
+      const logoX = leftMargin;
+      const logoY = y;
       
-      doc.image(logoPath, logoX, y, { width: logoWidth, height: logoHeight });
-      y += logoHeight + 15;
+      doc.image(logoPath, logoX, logoY, { width: logoWidth, height: logoHeight });
+      y += logoHeight + 10;
     } else {
       console.warn('Logo not found at:', logoPath);
     }
@@ -98,7 +99,7 @@ const generatePDFBuffer = async (reportId) => {
     console.warn('Could not load logo:', error.message);
   }
 
-  // ─── Header ──────────────────────────────────────────────────
+  // ─── Header (Centered) ──────────────────────────────────────
   // Main Title
   doc
     .fontSize(22)

@@ -19,22 +19,55 @@ const generatePDFBuffer = async (reportId) => {
 
   if (!report) throw new Error('Report not found');
 
-  const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  // ─── Create PDF with proper font settings ───
+  const doc = new PDFDocument({ 
+    size: 'A4', 
+    margin: 50,
+    info: {
+      Title: `HFC Report - ${report.fellowship?.name || 'Unknown'}`,
+      Author: 'Fountain of Life HFC System',
+    }
+  });
+  
   const chunks = [];
   doc.on('data', (chunk) => chunks.push(chunk));
   doc.on('end', () => {});
 
+  // ─── Helper Functions ──────────────────────────────────────
   const formatDate = (date) => {
     if (!date) return '—';
-    try { return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
+    try { 
+      return new Date(date).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      }); 
+    } catch { 
+      return '—'; 
+    }
   };
+
+  const drawField = (label, value, y) => {
+    doc
+      .fontSize(11)
+      .font('Helvetica-Bold')
+      .fillColor('#000')
+      .text(label, 50, y, { continued: false });
+    doc
+      .font('Helvetica')
+      .fillColor('#222')
+      .text(value || '—', 250, y, { width: 300 })
+      .moveDown(0.3);
+    return doc.y;
+  };
+
   const fellowshipName = report.fellowship?.name || 'Unknown';
   const leaderName = report.fellowship?.leader?.fullName || '—';
   const leaderEmail = report.fellowship?.leader?.email || '—';
   const associateName = report.fellowship?.associate?.fullName || '—';
   const associateEmail = report.fellowship?.associate?.email || '—';
 
-  // Header
+  // ─── Header ──────────────────────────────────────────────────
   doc
     .fontSize(18)
     .font('Helvetica-Bold')
@@ -51,6 +84,7 @@ const generatePDFBuffer = async (reportId) => {
     .text('Kindly fill this monthly HFC report.', { align: 'center' })
     .moveDown(1);
 
+  // ─── Divider Line ──────────────────────────────────────────
   doc
     .strokeColor('#c0a85d')
     .lineWidth(2)
@@ -59,25 +93,11 @@ const generatePDFBuffer = async (reportId) => {
     .stroke()
     .moveDown(1);
 
-  // Fellowship Information
+  // ─── Fellowship Information ────────────────────────────────
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
   const [year, month] = report.monthYear.split('-');
   const monthName = monthNames[parseInt(month) - 1];
-
-  const drawField = (label, value, y) => {
-    doc
-      .fontSize(11)
-      .font('Helvetica-Bold')
-      .fillColor('#000')
-      .text(label, 50, y, { continued: false });
-    doc
-      .font('Helvetica')
-      .fillColor('#222')
-      .text(value || '—', 250, y, { width: 300 })
-      .moveDown(0.3);
-    return doc.y;
-  };
 
   let yPos = doc.y;
   yPos = drawField('REPORT FOR THE MONTH OF', `${monthName} ${year}`, yPos);
@@ -89,18 +109,20 @@ const generatePDFBuffer = async (reportId) => {
 
   doc.moveDown(0.5);
 
-  // Weekly Attendance Table
+  // ─── Weekly Attendance Table ──────────────────────────────
+  // Use plain text without emoji for better compatibility
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('📊 WEEKLY ATTENDANCE')
+    .text('WEEKLY ATTENDANCE')
     .moveDown(0.3);
 
   const col1 = 50, col2 = 220, col3 = 380;
   let tableY = doc.y;
   const rowHeight = 25;
 
+  // ─── Table Header ──────────────────────────────────────────
   doc
     .fontSize(10)
     .font('Helvetica-Bold')
@@ -109,6 +131,7 @@ const generatePDFBuffer = async (reportId) => {
     .text('Meeting Date', col2, tableY, { width: 140 })
     .text('No. of Members', col3, tableY, { width: 160 });
   tableY += 20;
+  
   doc
     .strokeColor('#ddd')
     .lineWidth(1)
@@ -116,6 +139,7 @@ const generatePDFBuffer = async (reportId) => {
     .lineTo(col1 + 450, tableY - 5)
     .stroke();
 
+  // ─── Table Rows ────────────────────────────────────────────
   const weeks = [
     { num: 1, date: report.week1Date, count: report.week1Count },
     { num: 2, date: report.week2Date, count: report.week2Count },
@@ -138,47 +162,57 @@ const generatePDFBuffer = async (reportId) => {
   doc.moveDown(0.5);
   doc.y = tableY + 10;
 
-  // Pastoral Care & Follow-up
+  // ─── Pastoral Care ──────────────────────────────────────────
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('🙏 PASTORAL CARE')
+    .text('PASTORAL CARE')
     .moveDown(0.3);
+  
   yPos = doc.y;
-  yPos = drawField('I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK', report.prayerFlag ? '✅ YES' : '❌ NO', yPos);
+  yPos = drawField('I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK', 
+    report.prayerFlag ? 'YES' : 'NO', yPos);
   doc.moveDown(0.5);
 
+  // ─── Growth & Follow-up ────────────────────────────────────
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('📈 GROWTH & FOLLOW-UP')
+    .text('GROWTH & FOLLOW-UP')
     .moveDown(0.3);
+  
   yPos = doc.y;
   yPos = drawField('FIRST TIMERS OR NEW CONVERTS', report.firstTimers.toString(), yPos);
   yPos = drawField('NEW MEMBERS JOINED', report.newMembers.toString(), yPos);
   yPos = drawField('FOLLOW-UPS', report.followUps.toString(), yPos);
 
   doc.moveDown(0.5);
+
+  // ─── Issues & Feedback ──────────────────────────────────────
   doc
     .fontSize(12)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('⚠️ ISSUES & FEEDBACK')
+    .text('ISSUES & FEEDBACK')
     .moveDown(0.3);
+  
   yPos = doc.y;
   yPos = drawField('ISSUES FOR ESCALATION', report.escalations || 'None reported', yPos);
   yPos = drawField('COMMENTS / FEEDBACK', report.comments || 'None', yPos);
 
   doc.moveDown(1);
-  const statusText = report.status === 'FINALIZED' ? '✅ FINALIZED' : '📝 DRAFT';
+
+  // ─── Status ──────────────────────────────────────────────────
+  const statusText = report.status === 'FINALIZED' ? 'FINALIZED' : 'DRAFT';
   doc
     .fontSize(9)
     .font('Helvetica-Oblique')
     .fillColor('#888')
     .text(`Status: ${statusText}`, 50, doc.y);
 
+  // ─── Footer Line ────────────────────────────────────────────
   doc
     .strokeColor('#c0a85d')
     .lineWidth(1)
@@ -186,11 +220,16 @@ const generatePDFBuffer = async (reportId) => {
     .lineTo(545, 750)
     .stroke();
 
+  // ─── Footer Text ────────────────────────────────────────────
   doc
     .fontSize(8)
     .font('Helvetica')
     .fillColor('#999')
-    .text(`Generated by Fountain of Life HFC System • ${new Date().toLocaleString()}`, 50, 760, { align: 'center' });
+    .text(
+      `Generated by Fountain of Life HFC System • ${new Date().toLocaleString()}`,
+      50, 760, 
+      { align: 'center' }
+    );
 
   doc.end();
 

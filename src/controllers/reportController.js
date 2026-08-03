@@ -19,7 +19,7 @@ const generatePDFBuffer = async (reportId) => {
 
   if (!report) throw new Error('Report not found');
 
-  // ─── Create PDF with proper font settings ───
+  // ─── Create PDF with proper settings ───
   const doc = new PDFDocument({ 
     size: 'A4', 
     margin: 50,
@@ -37,28 +37,31 @@ const generatePDFBuffer = async (reportId) => {
   const formatDate = (date) => {
     if (!date) return '—';
     try { 
-      return new Date(date).toLocaleDateString('en-US', { 
+      const d = new Date(date);
+      // Force UTC to avoid timezone issues
+      return d.toLocaleDateString('en-US', { 
         month: 'short', 
         day: 'numeric', 
-        year: 'numeric' 
+        year: 'numeric',
+        timeZone: 'UTC'
       }); 
     } catch { 
       return '—'; 
     }
   };
 
-  const drawField = (label, value, y) => {
+  // ─── Draw a field with label and value ──────────────────────
+  const drawField = (label, value, y, labelWidth = 250) => {
     doc
-      .fontSize(11)
+      .fontSize(10)
       .font('Helvetica-Bold')
-      .fillColor('#000')
-      .text(label, 50, y, { continued: false });
+      .fillColor('#1a1a2e')
+      .text(label, 50, y, { continued: false, width: labelWidth });
     doc
       .font('Helvetica')
-      .fillColor('#222')
-      .text(value || '—', 250, y, { width: 300 })
-      .moveDown(0.3);
-    return doc.y;
+      .fillColor('#333')
+      .text(value || '—', labelWidth + 50, y, { width: 250 });
+    return doc.y + 5;
   };
 
   const fellowshipName = report.fellowship?.name || 'Unknown';
@@ -67,152 +70,163 @@ const generatePDFBuffer = async (reportId) => {
   const associateName = report.fellowship?.associate?.fullName || '—';
   const associateEmail = report.fellowship?.associate?.email || '—';
 
-  // ─── Header ──────────────────────────────────────────────────
+  // ─── Page 1: Header ──────────────────────────────────────────
+  let y = 50;
+
+  // Title
   doc
-    .fontSize(18)
+    .fontSize(20)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
     .text('MONTHLY FOUNTAIN OF LIFE', { align: 'center' })
+    .moveDown(0.3);
+  
+  doc
     .fontSize(16)
+    .font('Helvetica-Bold')
     .text('HOME FELLOWSHIP CENTRE REPORT', { align: 'center' })
     .moveDown(0.5);
 
   doc
     .fontSize(10)
     .font('Helvetica-Oblique')
-    .fillColor('#555')
+    .fillColor('#666')
     .text('Kindly fill this monthly HFC report.', { align: 'center' })
     .moveDown(1);
 
-  // ─── Divider Line ──────────────────────────────────────────
+  // Divider
+  y = doc.y;
   doc
     .strokeColor('#c0a85d')
     .lineWidth(2)
-    .moveTo(50, doc.y)
-    .lineTo(545, doc.y)
-    .stroke()
-    .moveDown(1);
+    .moveTo(50, y)
+    .lineTo(545, y)
+    .stroke();
+  y += 15;
 
-  // ─── Fellowship Information ────────────────────────────────
+  // ─── Fellowship Information ──────────────────────────────────
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
   const [year, month] = report.monthYear.split('-');
   const monthName = monthNames[parseInt(month) - 1];
 
-  let yPos = doc.y;
-  yPos = drawField('REPORT FOR THE MONTH OF', `${monthName} ${year}`, yPos);
-  yPos = drawField('NAME OF HOME FELLOWSHIP', fellowshipName, yPos);
-  yPos = drawField('NAME OF HOME FELLOWSHIP LEADER', leaderName, yPos);
-  yPos = drawField('HFL Email', leaderEmail, yPos);
-  yPos = drawField('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', associateName, yPos);
-  yPos = drawField('Associate HFL Email', associateEmail, yPos);
+  doc.y = y;
+  y = drawField('REPORT FOR THE MONTH OF', `${monthName} ${year}`, y);
+  y = drawField('NAME OF HOME FELLOWSHIP', fellowshipName, y);
+  y = drawField('NAME OF HOME FELLOWSHIP LEADER', leaderName, y);
+  y = drawField('HFL Email', leaderEmail, y);
+  y = drawField('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', associateName, y);
+  y = drawField('Associate HFL Email', associateEmail, y);
+  y += 10;
 
-  doc.moveDown(0.5);
-
-  // ─── Weekly Attendance Table ──────────────────────────────
-  // Use plain text without emoji for better compatibility
+  // ─── Weekly Attendance Table ─────────────────────────────────
   doc
-    .fontSize(12)
+    .fontSize(14)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('WEEKLY ATTENDANCE')
-    .moveDown(0.3);
+    .text('WEEKLY ATTENDANCE', { underline: true })
+    .moveDown(0.5);
 
-  const col1 = 50, col2 = 220, col3 = 380;
-  let tableY = doc.y;
+  // Table setup
+  const tableTop = doc.y;
+  const col1 = 50;
+  const col2 = 200;
+  const col3 = 350;
+  const col4 = 460;
   const rowHeight = 25;
 
-  // ─── Table Header ──────────────────────────────────────────
+  // Table header
   doc
     .fontSize(10)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('Week', col1, tableY, { width: 80 })
-    .text('Meeting Date', col2, tableY, { width: 140 })
-    .text('No. of Members', col3, tableY, { width: 160 });
-  tableY += 20;
-  
+    .text('Week', col1, tableTop, { width: 80 })
+    .text('Meeting Date', col2, tableTop, { width: 140 })
+    .text('No. of Members', col3, tableTop, { width: 160 });
+
+  // Header underline
+  const headerY = tableTop + 20;
   doc
     .strokeColor('#ddd')
     .lineWidth(1)
-    .moveTo(col1, tableY - 5)
-    .lineTo(col1 + 450, tableY - 5)
+    .moveTo(col1, headerY)
+    .lineTo(col4, headerY)
     .stroke();
 
-  // ─── Table Rows ────────────────────────────────────────────
+  // Table rows
   const weeks = [
-    { num: 1, date: report.week1Date, count: report.week1Count },
-    { num: 2, date: report.week2Date, count: report.week2Count },
-    { num: 3, date: report.week3Date, count: report.week3Count },
-    { num: 4, date: report.week4Date, count: report.week4Count },
-    { num: 5, date: report.week5Date, count: report.week5Count },
+    { num: 1, date: report.week1Date, count: report.week1Count || 0 },
+    { num: 2, date: report.week2Date, count: report.week2Count || 0 },
+    { num: 3, date: report.week3Date, count: report.week3Count || 0 },
+    { num: 4, date: report.week4Date, count: report.week4Count || 0 },
+    { num: 5, date: report.week5Date, count: report.week5Count || 0 },
   ];
 
+  let rowY = headerY + 10;
   weeks.forEach((week) => {
     doc
       .fontSize(10)
       .font('Helvetica')
-      .fillColor('#000')
-      .text(`Week ${week.num}`, col1, tableY, { width: 80 })
-      .text(formatDate(week.date), col2, tableY, { width: 140 })
-      .text(week.count.toString(), col3, tableY, { width: 160 });
-    tableY += rowHeight;
+      .fillColor('#333')
+      .text(`Week ${week.num}`, col1, rowY, { width: 80 })
+      .text(formatDate(week.date), col2, rowY, { width: 140 })
+      .text(week.count.toString(), col3, rowY, { width: 160 });
+    rowY += rowHeight;
   });
 
-  doc.moveDown(0.5);
-  doc.y = tableY + 10;
+  doc.y = rowY + 10;
 
-  // ─── Pastoral Care ──────────────────────────────────────────
+  // ─── Pastoral Care Section ────────────────────────────────────
   doc
-    .fontSize(12)
+    .fontSize(14)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('PASTORAL CARE')
-    .moveDown(0.3);
-  
-  yPos = doc.y;
-  yPos = drawField('I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK', 
-    report.prayerFlag ? 'YES' : 'NO', yPos);
-  doc.moveDown(0.5);
+    .text('PASTORAL CARE', { underline: true })
+    .moveDown(0.5);
 
-  // ─── Growth & Follow-up ────────────────────────────────────
+  doc.y = drawField('I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK', 
+    report.prayerFlag ? 'YES' : 'NO', doc.y, 350);
+  doc.y += 5;
+
+  // ─── Growth & Follow-up ──────────────────────────────────────
   doc
-    .fontSize(12)
+    .fontSize(14)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('GROWTH & FOLLOW-UP')
-    .moveDown(0.3);
-  
-  yPos = doc.y;
-  yPos = drawField('FIRST TIMERS OR NEW CONVERTS', report.firstTimers.toString(), yPos);
-  yPos = drawField('NEW MEMBERS JOINED', report.newMembers.toString(), yPos);
-  yPos = drawField('FOLLOW-UPS', report.followUps.toString(), yPos);
+    .text('GROWTH & FOLLOW-UP', { underline: true })
+    .moveDown(0.5);
 
-  doc.moveDown(0.5);
+  doc.y = drawField('FIRST TIMERS OR NEW CONVERTS', 
+    report.firstTimers?.toString() || '0', doc.y, 300);
+  doc.y = drawField('NEW MEMBERS JOINED', 
+    report.newMembers?.toString() || '0', doc.y, 300);
+  doc.y = drawField('FOLLOW-UPS', 
+    report.followUps?.toString() || '0', doc.y, 300);
+  doc.y += 5;
 
   // ─── Issues & Feedback ──────────────────────────────────────
   doc
-    .fontSize(12)
+    .fontSize(14)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('ISSUES & FEEDBACK')
-    .moveDown(0.3);
-  
-  yPos = doc.y;
-  yPos = drawField('ISSUES FOR ESCALATION', report.escalations || 'None reported', yPos);
-  yPos = drawField('COMMENTS / FEEDBACK', report.comments || 'None', yPos);
+    .text('ISSUES & FEEDBACK', { underline: true })
+    .moveDown(0.5);
 
-  doc.moveDown(1);
+  doc.y = drawField('ISSUES FOR ESCALATION', 
+    report.escalations || 'None reported', doc.y, 250);
+  doc.y = drawField('COMMENTS / FEEDBACK', 
+    report.comments || 'None', doc.y, 250);
+  doc.y += 10;
 
-  // ─── Status ──────────────────────────────────────────────────
+  // ─── Status and Footer ──────────────────────────────────────
   const statusText = report.status === 'FINALIZED' ? 'FINALIZED' : 'DRAFT';
   doc
-    .fontSize(9)
+    .fontSize(10)
     .font('Helvetica-Oblique')
     .fillColor('#888')
     .text(`Status: ${statusText}`, 50, doc.y);
 
-  // ─── Footer Line ────────────────────────────────────────────
+  // Footer line
   doc
     .strokeColor('#c0a85d')
     .lineWidth(1)
@@ -220,14 +234,14 @@ const generatePDFBuffer = async (reportId) => {
     .lineTo(545, 750)
     .stroke();
 
-  // ─── Footer Text ────────────────────────────────────────────
+  // Footer text
   doc
     .fontSize(8)
     .font('Helvetica')
     .fillColor('#999')
     .text(
       `Generated by Fountain of Life HFC System • ${new Date().toLocaleString()}`,
-      50, 760, 
+      50, 760,
       { align: 'center' }
     );
 

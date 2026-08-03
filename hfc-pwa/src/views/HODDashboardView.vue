@@ -115,6 +115,11 @@ const filters = ref({
 const chartCanvas = ref(null);
 let chartInstance = null;
 
+// ─── Get the base API URL from environment ──────────────────────
+const getBaseUrl = () => {
+  return import.meta.env.VITE_API_BASE_URL || 'https://fountain-hfc.onrender.com/api';
+};
+
 // ─── Computed ──────────────────────────────────────────────────────
 const filteredReports = computed(() => {
   let filtered = reports.value;
@@ -234,15 +239,16 @@ const downloadPDF = async (reportId) => {
     return;
   }
 
-  // Show loading state for this specific button
   downloadingPDF.value[reportId] = true;
 
   try {
-    // Open PDF with token as query parameter
-    const url = `/api/reports/${reportId}/pdf?token=${token}`;
+    const baseUrl = getBaseUrl();
+    // ─── FIX: Use the full URL with token ───
+    const url = `${baseUrl}/reports/${reportId}/pdf?token=${token}`;
+    
+    console.log('📄 Downloading PDF:', url);
     window.open(url, '_blank');
     
-    // Small delay to allow the download to start
     await new Promise(resolve => setTimeout(resolve, 1000));
   } catch (error) {
     console.error('Error downloading PDF:', error);
@@ -275,17 +281,16 @@ const downloadAllPDFs = async () => {
   }
 
   downloadingAll.value = true;
-  
+  const baseUrl = getBaseUrl();
+
   try {
-    // Download each PDF with a delay to avoid browser blocking
     for (let i = 0; i < filteredReports.value.length; i++) {
       const report = filteredReports.value[i];
-      const url = `/api/reports/${report.id}/pdf?token=${token}`;
+      const url = `${baseUrl}/reports/${report.id}/pdf?token=${token}`;
       
-      // Open in new tab with delay between downloads
+      console.log(`📄 Downloading PDF ${i + 1}/${filteredReports.value.length}`);
       window.open(url, '_blank');
       
-      // Add delay between downloads (500ms)
       if (i < filteredReports.value.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
@@ -389,7 +394,6 @@ watch(filters, () => {
   }
 }
 
-/* Table responsiveness */
 .table-responsive {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -412,12 +416,10 @@ watch(filters, () => {
   }
 }
 
-/* Chart container */
 .card-body {
   min-height: 200px;
 }
 
-/* Badge styles */
 .badge {
   font-size: 0.75rem;
   padding: 0.35rem 0.65rem;

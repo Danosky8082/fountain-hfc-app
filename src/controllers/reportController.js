@@ -38,15 +38,30 @@ const generatePDFBuffer = async (reportId) => {
     if (!date) return '—';
     try { 
       const d = new Date(date);
-      return d.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric',
-        timeZone: 'UTC'
-      }); 
+      // Force UTC to avoid timezone issues
+      const year = d.getUTCFullYear();
+      const month = d.getUTCMonth();
+      const day = d.getUTCDate();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[month]} ${day}, ${year}`;
     } catch { 
       return '—'; 
     }
+  };
+
+  // ─── Draw a field with proper spacing ──────────────────────
+  const drawField = (doc, label, value, x, y, labelWidth = 200) => {
+    doc
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .fillColor('#1a1a2e')
+      .text(label, x, y, { continued: false, width: labelWidth });
+    doc
+      .font('Helvetica')
+      .fillColor('#333')
+      .text(value || '—', x + labelWidth + 10, y, { width: 300 });
+    return y + 22;
   };
 
   const fellowshipName = report.fellowship?.name || 'Unknown';
@@ -60,7 +75,7 @@ const generatePDFBuffer = async (reportId) => {
   const leftMargin = 50;
   let y = 50;
 
-  // ─── Header with Decorative Line ─────────────────────────────
+  // ─── Header ──────────────────────────────────────────────────
   // Top decorative line
   doc
     .strokeColor('#c0a85d')
@@ -68,7 +83,7 @@ const generatePDFBuffer = async (reportId) => {
     .moveTo(leftMargin, y)
     .lineTo(leftMargin + pageWidth, y)
     .stroke();
-  y += 15;
+  y += 20;
 
   // Main Title
   doc
@@ -90,7 +105,7 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Bold')
     .fillColor('#c0a85d')
     .text('MONTHLY REPORT', { align: 'center' })
-    .moveDown(0.5);
+    .moveDown(0.8);
 
   // Subtitle
   doc
@@ -98,7 +113,7 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Oblique')
     .fillColor('#666')
     .text('Kindly fill this monthly HFC report.', { align: 'center' })
-    .moveDown(0.8);
+    .moveDown(1);
 
   // Bottom decorative line
   doc
@@ -107,23 +122,23 @@ const generatePDFBuffer = async (reportId) => {
     .moveTo(leftMargin, doc.y)
     .lineTo(leftMargin + pageWidth, doc.y)
     .stroke();
-  y = doc.y + 15;
+  y = doc.y + 20;
 
   // ─── Fellowship Information Box ──────────────────────────────
   // Draw a light background box
   doc
     .fillColor('#f8f5f0')
-    .rect(leftMargin, y, pageWidth, 130)
+    .rect(leftMargin, y, pageWidth, 155)
     .fill();
 
   // Border for the box
   doc
     .strokeColor('#c0a85d')
     .lineWidth(1)
-    .rect(leftMargin, y, pageWidth, 130)
+    .rect(leftMargin, y, pageWidth, 155)
     .stroke();
 
-  let boxY = y + 10;
+  let boxY = y + 12;
   const labelX = leftMargin + 15;
   const valueX = leftMargin + 220;
 
@@ -133,70 +148,17 @@ const generatePDFBuffer = async (reportId) => {
   const [year, month] = report.monthYear.split('-');
   const monthName = monthNames[parseInt(month) - 1];
 
-  doc
-    .fontSize(11)
-    .font('Helvetica-Bold')
-    .fillColor('#1a1a2e')
-    .text('REPORT FOR THE MONTH OF', labelX, boxY);
-  doc
-    .font('Helvetica')
-    .fillColor('#333')
-    .text(`${monthName} ${year}`, valueX, boxY);
-  boxY += 20;
+  boxY = drawField(doc, 'REPORT FOR THE MONTH OF', `${monthName} ${year}`, labelX, boxY);
+  boxY = drawField(doc, 'NAME OF HOME FELLOWSHIP', fellowshipName, labelX, boxY);
+  boxY = drawField(doc, 'NAME OF HOME FELLOWSHIP LEADER', leaderName, labelX, boxY);
+  boxY = drawField(doc, 'HFL Email', leaderEmail, labelX, boxY);
+  boxY = drawField(doc, 'NAME OF ASSOCIATE HFL LEADER', associateName, labelX, boxY);
+  boxY = drawField(doc, 'Associate HFL Email', associateEmail, labelX, boxY);
 
-  doc
-    .font('Helvetica-Bold')
-    .fillColor('#1a1a2e')
-    .text('NAME OF HOME FELLOWSHIP', labelX, boxY);
-  doc
-    .font('Helvetica')
-    .fillColor('#333')
-    .text(fellowshipName, valueX, boxY);
-  boxY += 20;
-
-  doc
-    .font('Helvetica-Bold')
-    .fillColor('#1a1a2e')
-    .text('NAME OF HOME FELLOWSHIP LEADER', labelX, boxY);
-  doc
-    .font('Helvetica')
-    .fillColor('#333')
-    .text(leaderName, valueX, boxY);
-  boxY += 20;
-
-  doc
-    .font('Helvetica-Bold')
-    .fillColor('#1a1a2e')
-    .text('HFL Email', labelX, boxY);
-  doc
-    .font('Helvetica')
-    .fillColor('#333')
-    .text(leaderEmail, valueX, boxY);
-  boxY += 20;
-
-  doc
-    .font('Helvetica-Bold')
-    .fillColor('#1a1a2e')
-    .text('NAME OF ASSOCIATE HOME FELLOWSHIP LEADER', labelX, boxY);
-  doc
-    .font('Helvetica')
-    .fillColor('#333')
-    .text(associateName, valueX, boxY);
-  boxY += 20;
-
-  doc
-    .font('Helvetica-Bold')
-    .fillColor('#1a1a2e')
-    .text('Associate HFL Email', labelX, boxY);
-  doc
-    .font('Helvetica')
-    .fillColor('#333')
-    .text(associateEmail, valueX, boxY);
-
-  y = boxY + 25;
+  y = boxY + 20;
 
   // ─── Weekly Attendance Table ─────────────────────────────────
-  // Section header with gold underline
+  // Section header
   doc
     .fontSize(14)
     .font('Helvetica-Bold')
@@ -207,9 +169,9 @@ const generatePDFBuffer = async (reportId) => {
     .strokeColor('#c0a85d')
     .lineWidth(2)
     .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 150, y + 5)
+    .lineTo(leftMargin + 160, y + 5)
     .stroke();
-  y += 20;
+  y += 25;
 
   // Table setup
   const tableTop = y;
@@ -217,12 +179,12 @@ const generatePDFBuffer = async (reportId) => {
   const col2 = leftMargin + 120;
   const col3 = leftMargin + 280;
   const col4 = leftMargin + 420;
-  const rowHeight = 28;
+  const rowHeight = 30;
 
   // Table header background
   doc
     .fillColor('#1a1a2e')
-    .rect(col1, tableTop, pageWidth, 25)
+    .rect(col1, tableTop, pageWidth, 28)
     .fill();
 
   // Table header text
@@ -230,9 +192,9 @@ const generatePDFBuffer = async (reportId) => {
     .fontSize(10)
     .font('Helvetica-Bold')
     .fillColor('#ffffff')
-    .text('Week', col1 + 10, tableTop + 6, { width: 80 })
-    .text('Meeting Date', col2 + 10, tableTop + 6, { width: 140 })
-    .text('No. of Members', col3 + 10, tableTop + 6, { width: 160 });
+    .text('Week', col1 + 10, tableTop + 7, { width: 80 })
+    .text('Meeting Date', col2 + 10, tableTop + 7, { width: 140 })
+    .text('No. of Members', col3 + 10, tableTop + 7, { width: 160 });
 
   // Table rows
   const weeks = [
@@ -243,7 +205,7 @@ const generatePDFBuffer = async (reportId) => {
     { num: 5, date: report.week5Date, count: report.week5Count || 0 },
   ];
 
-  let rowY = tableTop + 25;
+  let rowY = tableTop + 28;
   let rowIndex = 0;
   weeks.forEach((week) => {
     // Alternate row colors
@@ -254,13 +216,14 @@ const generatePDFBuffer = async (reportId) => {
         .fill();
     }
 
+    const dateStr = week.date ? formatDate(week.date) : '—';
     doc
       .fontSize(10)
       .font('Helvetica')
       .fillColor('#333')
-      .text(`Week ${week.num}`, col1 + 10, rowY + 7, { width: 80 })
-      .text(formatDate(week.date), col2 + 10, rowY + 7, { width: 140 })
-      .text(week.count.toString(), col3 + 10, rowY + 7, { width: 160 });
+      .text(`Week ${week.num}`, col1 + 10, rowY + 8, { width: 80 })
+      .text(dateStr, col2 + 10, rowY + 8, { width: 140 })
+      .text(week.count.toString(), col3 + 10, rowY + 8, { width: 160 });
     
     rowY += rowHeight;
     rowIndex++;
@@ -273,7 +236,7 @@ const generatePDFBuffer = async (reportId) => {
     .rect(col1, tableTop, pageWidth, rowY - tableTop)
     .stroke();
 
-  y = rowY + 20;
+  y = rowY + 25;
 
   // ─── Pastoral Care Section ────────────────────────────────────
   doc
@@ -286,21 +249,21 @@ const generatePDFBuffer = async (reportId) => {
     .strokeColor('#c0a85d')
     .lineWidth(2)
     .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 120, y + 5)
+    .lineTo(leftMargin + 130, y + 5)
     .stroke();
-  y += 22;
+  y += 25;
 
-  // Prayer flag
+  // Prayer flag with proper spacing
   doc
     .fontSize(10)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
-    .text('I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK:', leftMargin, y);
+    .text('I PRAYED FOR EVERY MEMBER... AT LEAST ONCE A WEEK:', leftMargin, y, { width: 350 });
   doc
-    .font('Helvetica')
-    .fillColor('#c0a85d')
-    .text(report.prayerFlag ? '✅ YES' : '❌ NO', leftMargin + 370, y);
-  y += 22;
+    .font('Helvetica-Bold')
+    .fillColor(report.prayerFlag ? '#28a745' : '#dc3545')
+    .text(report.prayerFlag ? 'YES' : 'NO', leftMargin + 360, y);
+  y += 30;
 
   // ─── Growth & Follow-up ──────────────────────────────────────
   doc
@@ -313,9 +276,9 @@ const generatePDFBuffer = async (reportId) => {
     .strokeColor('#c0a85d')
     .lineWidth(2)
     .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 160, y + 5)
+    .lineTo(leftMargin + 170, y + 5)
     .stroke();
-  y += 22;
+  y += 25;
 
   const growthItems = [
     { label: 'FIRST TIMERS OR NEW CONVERTS', value: report.firstTimers?.toString() || '0' },
@@ -328,13 +291,15 @@ const generatePDFBuffer = async (reportId) => {
       .fontSize(10)
       .font('Helvetica-Bold')
       .fillColor('#1a1a2e')
-      .text(item.label + ':', leftMargin, y);
+      .text(item.label + ':', leftMargin, y, { width: 250 });
     doc
       .font('Helvetica')
       .fillColor('#333')
-      .text(item.value, leftMargin + 250, y);
-    y += 20;
+      .text(item.value, leftMargin + 260, y);
+    y += 24;
   });
+
+  y += 5;
 
   // ─── Issues & Feedback ──────────────────────────────────────
   doc
@@ -347,9 +312,9 @@ const generatePDFBuffer = async (reportId) => {
     .strokeColor('#c0a85d')
     .lineWidth(2)
     .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 140, y + 5)
+    .lineTo(leftMargin + 150, y + 5)
     .stroke();
-  y += 22;
+  y += 25;
 
   const issuesItems = [
     { label: 'ISSUES FOR ESCALATION', value: report.escalations || 'None reported' },
@@ -361,22 +326,22 @@ const generatePDFBuffer = async (reportId) => {
       .fontSize(10)
       .font('Helvetica-Bold')
       .fillColor('#1a1a2e')
-      .text(item.label + ':', leftMargin, y);
+      .text(item.label + ':', leftMargin, y, { width: 200 });
     doc
       .font('Helvetica')
       .fillColor('#333')
-      .text(item.value, leftMargin + 200, y);
-    y += 20;
+      .text(item.value, leftMargin + 210, y, { width: 300 });
+    y += 24;
   });
 
-  y += 10;
+  y += 15;
 
-  // ─── Status and Footer ──────────────────────────────────────
+  // ─── Status ──────────────────────────────────────────────────
   const statusText = report.status === 'FINALIZED' ? 'FINALIZED' : 'DRAFT';
   const statusColor = report.status === 'FINALIZED' ? '#28a745' : '#ffc107';
   
   doc
-    .fontSize(11)
+    .fontSize(12)
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
     .text('Status:', leftMargin, y);
@@ -386,12 +351,13 @@ const generatePDFBuffer = async (reportId) => {
     .text(statusText, leftMargin + 80, y);
   y += 30;
 
+  // ─── Footer ──────────────────────────────────────────────────
   // Footer decorative line
   doc
     .strokeColor('#c0a85d')
     .lineWidth(1)
-    .moveTo(leftMargin, 750)
-    .lineTo(leftMargin + pageWidth, 750)
+    .moveTo(leftMargin, 745)
+    .lineTo(leftMargin + pageWidth, 745)
     .stroke();
 
   // Footer text
@@ -401,7 +367,7 @@ const generatePDFBuffer = async (reportId) => {
     .fillColor('#999')
     .text(
       `Generated by Fountain of Life HFC System • ${new Date().toLocaleString()}`,
-      leftMargin, 765,
+      leftMargin, 760,
       { align: 'center' }
     );
 

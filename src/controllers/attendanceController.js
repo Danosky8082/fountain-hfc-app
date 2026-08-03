@@ -9,6 +9,7 @@ const getCurrentSunday = () => {
   const sunday = new Date(now);
   sunday.setDate(diff);
   sunday.setHours(0, 0, 0, 0);
+  sunday.setMinutes(0, 0, 0); // Ensure time is exactly midnight
   return sunday;
 };
 
@@ -47,12 +48,20 @@ const getCurrentWeekInfo = () => {
   const weekNumber = getWeekNumber(sunday);
   const monthYear = sunday.toISOString().slice(0, 7);
   
-  console.log(`📅 Current week: ${weekNumber}, Sunday date: ${sunday.toISOString().split('T')[0]}`);
+  // Format date for display
+  const formattedDate = sunday.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric' 
+  });
+  
+  console.log(`📅 Current week: ${weekNumber}, Sunday date: ${sunday.toISOString().split('T')[0]} (${formattedDate})`);
   
   return {
     weekNumber,
     monthYear,
     meetingDate: sunday,
+    formattedDate: formattedDate,
     year: sunday.getFullYear(),
     month: sunday.getMonth(),
   };

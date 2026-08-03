@@ -33,18 +33,27 @@ const generatePDFBuffer = async (reportId) => {
   doc.on('data', (chunk) => chunks.push(chunk));
   doc.on('end', () => {});
 
-  // ─── Helper Functions ──────────────────────────────────────
+  // ─── FIXED: Date Formatting Function with Timezone Handling ──
   const formatDate = (date) => {
     if (!date) return '—';
     try { 
       const d = new Date(date);
-      // Force UTC to avoid timezone issues
-      const year = d.getUTCFullYear();
-      const month = d.getUTCMonth();
-      const day = d.getUTCDate();
+      
+      // Check if date is valid
+      if (isNaN(d.getTime())) return '—';
+      
+      // Nigeria is UTC+1 - add 1 hour to convert UTC to Nigeria time
+      const timezoneOffset = 1; // Nigeria is UTC+1
+      const adjustedDate = new Date(d.getTime() + (timezoneOffset * 60 * 60 * 1000));
+      
+      // Format as "Aug 2, 2026"
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${months[month]} ${day}, ${year}`;
+      const month = months[adjustedDate.getUTCMonth()];
+      const day = adjustedDate.getUTCDate();
+      const year = adjustedDate.getUTCFullYear();
+      
+      return `${month} ${day}, ${year}`;
     } catch { 
       return '—'; 
     }
@@ -196,7 +205,7 @@ const generatePDFBuffer = async (reportId) => {
     .text('Meeting Date', col2 + 10, tableTop + 7, { width: 140 })
     .text('No. of Members', col3 + 10, tableTop + 7, { width: 160 });
 
-  // Table rows
+  // Table rows - using the FIXED formatDate function
   const weeks = [
     { num: 1, date: report.week1Date, count: report.week1Count || 0 },
     { num: 2, date: report.week2Date, count: report.week2Count || 0 },
@@ -216,6 +225,7 @@ const generatePDFBuffer = async (reportId) => {
         .fill();
     }
 
+    // ─── FIX: Use the formatDate function here ───
     const dateStr = week.date ? formatDate(week.date) : '—';
     doc
       .fontSize(10)

@@ -17,7 +17,8 @@
     <div v-else-if="session">
       <div class="card mb-3">
         <div class="card-body">
-          <h5>Week {{ session.weekNumber }} – {{ session.meetingDate }}</h5>
+          <!-- FIX: Format the date here -->
+          <h5>Week {{ session.weekNumber }} – {{ formatDate(session.meetingDate) }}</h5>
           <p>Total Present: <strong>{{ session.totalPresent }}</strong></p>
           <button
             :disabled="session.isSubmitted"
@@ -62,6 +63,23 @@ const isAdminOrHod = computed(() => authStore.user?.role === 'ADMIN' || authStor
 
 const goBack = () => {
   router.push('/dashboard');
+};
+
+// ─── Date Formatting Function ──────────────────────────────────
+const formatDate = (dateString) => {
+  if (!dateString) return '—';
+  try {
+    const date = new Date(dateString);
+    // Format as "Aug 2, 2026"
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateString;
+  }
 };
 
 // ─── Fetch fellowships (for Admin/HOD) ──────────────────────────

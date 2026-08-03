@@ -2,8 +2,10 @@
 const prisma = require('../prisma');
 const PDFDocument = require('pdfkit');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 
-// ─── Helper: Generate Professional PDF ──────────────────────────
+// ─── Helper: Generate Professional PDF with Logo ──────────────────
 const generatePDFBuffer = async (reportId) => {
   const report = await prisma.monthlyReport.findUnique({
     where: { id: reportId },
@@ -38,21 +40,15 @@ const generatePDFBuffer = async (reportId) => {
     if (!date) return '—';
     try { 
       const d = new Date(date);
-      
-      // Check if date is valid
       if (isNaN(d.getTime())) return '—';
-      
-      // Nigeria is UTC+1 - add 1 hour to convert UTC to Nigeria time
-      const timezoneOffset = 1; // Nigeria is UTC+1
+      // Nigeria is UTC+1
+      const timezoneOffset = 1;
       const adjustedDate = new Date(d.getTime() + (timezoneOffset * 60 * 60 * 1000));
-      
-      // Format as "Aug 2, 2026"
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const month = months[adjustedDate.getUTCMonth()];
       const day = adjustedDate.getUTCDate();
       const year = adjustedDate.getUTCFullYear();
-      
       return `${month} ${day}, ${year}`;
     } catch { 
       return '—'; 
@@ -84,16 +80,25 @@ const generatePDFBuffer = async (reportId) => {
   const leftMargin = 50;
   let y = 50;
 
-  // ─── Header ──────────────────────────────────────────────────
-  // Top decorative line
-  doc
-    .strokeColor('#c0a85d')
-    .lineWidth(3)
-    .moveTo(leftMargin, y)
-    .lineTo(leftMargin + pageWidth, y)
-    .stroke();
-  y += 20;
+  // ─── Logo Section ──────────────────────────────────────────────
+  try {
+    const logoPath = path.join(__dirname, '../../assets/fountain.jpg');
+    
+    if (fs.existsSync(logoPath)) {
+      const logoWidth = 80;
+      const logoHeight = 80;
+      const logoX = (doc.page.width - logoWidth) / 2;
+      
+      doc.image(logoPath, logoX, y, { width: logoWidth, height: logoHeight });
+      y += logoHeight + 15;
+    } else {
+      console.warn('Logo not found at:', logoPath);
+    }
+  } catch (error) {
+    console.warn('Could not load logo:', error.message);
+  }
 
+  // ─── Header ──────────────────────────────────────────────────
   // Main Title
   doc
     .fontSize(22)
@@ -122,12 +127,12 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Oblique')
     .fillColor('#666')
     .text('Kindly fill this monthly HFC report.', { align: 'center' })
-    .moveDown(1);
+    .moveDown(1.5);
 
-  // Bottom decorative line
+  // ─── Decorative Line (moved below text) ────────────────────
   doc
     .strokeColor('#c0a85d')
-    .lineWidth(1)
+    .lineWidth(2)
     .moveTo(leftMargin, doc.y)
     .lineTo(leftMargin + pageWidth, doc.y)
     .stroke();
@@ -173,14 +178,16 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
     .text('WEEKLY ATTENDANCE', leftMargin, y);
-  
+  y += 10;
+
+  // Decorative line under section header (moved below text)
   doc
     .strokeColor('#c0a85d')
     .lineWidth(2)
-    .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 160, y + 5)
+    .moveTo(leftMargin, y)
+    .lineTo(leftMargin + 160, y)
     .stroke();
-  y += 25;
+  y += 15;
 
   // Table setup
   const tableTop = y;
@@ -225,7 +232,6 @@ const generatePDFBuffer = async (reportId) => {
         .fill();
     }
 
-    // ─── FIX: Use the formatDate function here ───
     const dateStr = week.date ? formatDate(week.date) : '—';
     doc
       .fontSize(10)
@@ -254,14 +260,15 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
     .text('PASTORAL CARE', leftMargin, y);
-  
+  y += 10;
+
   doc
     .strokeColor('#c0a85d')
     .lineWidth(2)
-    .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 130, y + 5)
+    .moveTo(leftMargin, y)
+    .lineTo(leftMargin + 130, y)
     .stroke();
-  y += 25;
+  y += 15;
 
   // Prayer flag with proper spacing
   doc
@@ -281,14 +288,15 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
     .text('GROWTH & FOLLOW-UP', leftMargin, y);
-  
+  y += 10;
+
   doc
     .strokeColor('#c0a85d')
     .lineWidth(2)
-    .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 170, y + 5)
+    .moveTo(leftMargin, y)
+    .lineTo(leftMargin + 170, y)
     .stroke();
-  y += 25;
+  y += 15;
 
   const growthItems = [
     { label: 'FIRST TIMERS OR NEW CONVERTS', value: report.firstTimers?.toString() || '0' },
@@ -317,14 +325,15 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Bold')
     .fillColor('#1a1a2e')
     .text('ISSUES & FEEDBACK', leftMargin, y);
-  
+  y += 10;
+
   doc
     .strokeColor('#c0a85d')
     .lineWidth(2)
-    .moveTo(leftMargin, y + 5)
-    .lineTo(leftMargin + 150, y + 5)
+    .moveTo(leftMargin, y)
+    .lineTo(leftMargin + 150, y)
     .stroke();
-  y += 25;
+  y += 15;
 
   const issuesItems = [
     { label: 'ISSUES FOR ESCALATION', value: report.escalations || 'None reported' },
@@ -359,7 +368,7 @@ const generatePDFBuffer = async (reportId) => {
     .font('Helvetica-Bold')
     .fillColor(statusColor)
     .text(statusText, leftMargin + 80, y);
-  y += 30;
+  y += 35;
 
   // ─── Footer ──────────────────────────────────────────────────
   // Footer decorative line

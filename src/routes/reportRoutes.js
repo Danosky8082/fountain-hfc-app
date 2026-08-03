@@ -2,25 +2,26 @@
 const express = require('express');
 const router = express.Router();
 const reportController = require('../controllers/reportController');
+const { verifyToken } = require('../middlewares/authMiddleware');
 
 // ─── Routes ──────────────────────────────────────────────────
-// Get current report (or create one)
-router.get('/current', reportController.getCurrentReport);
 
-// Get all reports (HOD dashboard)
-router.get('/all', reportController.getAllReports);
+// Get current report (or create one) - Requires authentication
+router.get('/current', verifyToken, reportController.getCurrentReport);
 
-// Export CSV
-router.get('/csv', reportController.exportCSV);
+// Get all reports (HOD dashboard) - Requires authentication
+router.get('/all', verifyToken, reportController.getAllReports);
 
-// Download PDF - This route should NOT use the verifyToken middleware
-// because we handle authentication manually via query param
+// Export CSV - Requires authentication
+router.get('/csv', verifyToken, reportController.exportCSV);
+
+// Download PDF - NO middleware, handles auth manually via query param
 router.get('/:id/pdf', reportController.generatePDF);
 
-// Get single report by ID
-router.get('/:id', reportController.getReportById);
+// Get single report by ID - Requires authentication
+router.get('/:id', verifyToken, reportController.getReportById);
 
-// Update report
-router.put('/:id', reportController.updateReport);
+// Update report - Requires authentication
+router.put('/:id', verifyToken, reportController.updateReport);
 
 module.exports = router;

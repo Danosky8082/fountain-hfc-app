@@ -200,12 +200,305 @@ const generatePDFBuffer = async (reportId) => {
   });
 };
 
-// ─── Generate PDF (for download) ──────────────────────────────
+// ─── Get Current Report ────────────────────────────────────────
+exports.getCurrentReport = async (req, res) => {
+  try {
+    const { fellowshipId, userId, role } = req.user;
+    
+    console.log(`📊 [REPORT] Getting report for fellowship ${fellowshipId}`);
+    
+    if (!fellowshipId && role !== 'ADMIN' && role !== 'HOD') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No fellowship assigned to this user. Please contact admin.' 
+      });
+    }
+
+    const now = new Date();
+    const monthYear = now.toISOString().slice(0, 7);
+
+    // First, check if there are any submitted sessions
+    const submittedSessions = await prisma.attendanceSession.findMany({
+      where: {
+        fellowshipId: fellowshipId,
+        monthYear: monthYear,
+        isSubmitted: true,
+      },
+      include: { records: true },
+      orderBy: { weekNumber: 'asc' },
+    });
+
+    console.log(`📊 [REPORT] Found ${submittedSessions.length} submitted sessions`);
+
+    // Calculate counts from sessions
+    const weekCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const weekDates = { 1: null, 2: null, 3: null, 4: null, 5: null };
+    
+    submittedSessions.forEach((s) => {
+      if (s.weekNumber >= 1 && s.weekNumber <= 5) {
+        weekCounts[s.weekNumber] = s.records.length;
+        weekDates[s.weekNumber] = s.meetingDate;
+        console.log(`📊 [REPORT] Week ${s.weekNumber}: ${s.records.length} members present`);
+      }
+    });
+
+    // Find or create report
+    let report = await prisma.monthlyReport.findUnique({
+      where: {
+        fellowshipId_monthYear: {
+          fellowshipId: fellowshipId,
+          monthYear: monthYear,
+        },
+      },
+      include: {
+        fellowship: {
+          include: {
+            leader: true,
+            associate: true,
+          },
+        },
+      },
+    });
+
+    if (report) {
+      // Update existing report
+      report = await prisma.monthlyReport.update({
+        where: { id: report.id },
+        data: {
+          week1Date: weekDates[1],
+          week2Date: weekDates[2],
+          week3Date: weekDates[3],
+          week4Date: weekDates[4],
+          week5Date: weekDates[5],
+          week1Count: weekCounts[1],
+          week2Count: weekCounts[2],
+          week3Count: weekCounts[3],
+          week4Count: weekCounts[4],
+          week5Count: weekCounts[5],
+        },
+        include: {
+          fellowship: {
+            include: {
+              leader: true,
+              associate: true,
+            },
+          },
+        },
+      });
+    } else {
+      // Create new report
+      report = await prisma.monthlyReport.create({
+        data: {
+          fellowshipId: fellowshipId,
+          monthYear: monthYear,
+          week1Date: weekDates[1],
+          week2Date: weekDates[2],
+          week3Date: weekDates[3],
+          week4Date: weekDates[4],
+          week5Date: weekDates[5],
+          week1Count: weekCounts[1],
+          week2Count: weekCounts[2],
+          week3Count: weekCounts[3],
+          week4Count: weekCounts[4],
+          week5Count: weekCounts[5],
+          status: 'DRAFT',
+        },
+        include: {
+          fellowship: {
+            include: {
+              leader: true,
+              associate: true,
+            },
+          },
+        },
+      });
+    }
+
+    res.status(200).json({ success: true, data: report });
+  } catch (error) {
+    console.error('Get Report Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to generate report.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ─── Update Report ─────────────────────────────────────────────
+exports.updateReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, role, fellowshipId: userFellowshipId } = req.user;
+    const {
+      prayerFlag,
+      firstTimers,
+      newMembers,
+      followUps,
+      escalations,
+      comments,
+      action = 'SAVE',
+    } = req.body;
+
+    console.log('📝 updateReport:', { id, action, userId, role });
+
+    const existing = await prisma.monthlyReport.findUnique({
+      where: { id },
+      include: { fellowship: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Report not found.' });
+    }
+
+    // Check authorization
+    const isAuthorized = 
+      role === 'ADMIN' || 
+      role === 'HOD' || 
+      userFellowshipId === existing.fellowshipId;
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to edit this report.',
+      });
+    }
+
+    // Handle RESET_TO_DRAFT
+    if (action === 'RESET_TO_DRAFT') {
+      if (existing.status !== 'FINALIZED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only finalized reports can be reset to draft.',
+        });
+      }
+
+      const updated = await prisma.monthlyReport.update({
+        where: { id },
+        data: {
+          status: 'DRAFT',
+          finalizedAt: null,
+          finalizedBy: null,
+        },
+        include: {
+          fellowship: {
+            include: {
+              leader: true,
+              associate: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Report reset to draft successfully.',
+        data: updated,
+      });
+    }
+
+    // For SAVE / FINALIZE
+    if (existing.status === 'FINALIZED') {
+      return res.status(400).json({
+        success: false,
+        message: 'This report is already finalized and cannot be edited.',
+      });
+    }
+
+    const updateData = {
+      prayerFlag: prayerFlag !== undefined ? prayerFlag : existing.prayerFlag,
+      firstTimers: firstTimers !== undefined ? firstTimers : existing.firstTimers,
+      newMembers: newMembers !== undefined ? newMembers : existing.newMembers,
+      followUps: followUps !== undefined ? followUps : existing.followUps,
+      escalations: escalations !== undefined ? escalations : existing.escalations,
+      comments: comments !== undefined ? comments : existing.comments,
+    };
+
+    if (action === 'FINALIZE') {
+      updateData.status = 'FINALIZED';
+      updateData.finalizedAt = new Date();
+      updateData.finalizedBy = userId;
+    }
+
+    const updated = await prisma.monthlyReport.update({
+      where: { id },
+      data: updateData,
+      include: {
+        fellowship: {
+          include: {
+            leader: true,
+            associate: true,
+          },
+        },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: action === 'FINALIZE' ? '✅ Report finalized successfully!' : '💾 Draft saved!',
+      data: updated,
+    });
+  } catch (error) {
+    console.error('❌ Update Report Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update report.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ─── Get All Reports (HOD Dashboard) ──────────────────────────
+exports.getAllReports = async (req, res) => {
+  try {
+    const { role } = req.user;
+    if (role !== 'HOD' && role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only HOD or Admin can access this endpoint.',
+      });
+    }
+
+    const { monthYear } = req.query;
+    const targetMonth = monthYear || new Date().toISOString().slice(0, 7);
+
+    const reports = await prisma.monthlyReport.findMany({
+      where: { monthYear: targetMonth },
+      include: {
+        fellowship: {
+          include: {
+            leader: true,
+            associate: true,
+          },
+        },
+      },
+      orderBy: {
+        fellowship: { name: 'asc' },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      count: reports.length,
+      monthYear: targetMonth,
+      data: reports,
+    });
+  } catch (error) {
+    console.error('Get All Reports Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch reports.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ─── Generate PDF ──────────────────────────────────────────────
 exports.generatePDF = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // ─── FIX: Check for token in query string OR headers ───
+    // Check for token in query string OR headers
     const token = req.query.token || req.headers.authorization?.split(' ')[1];
     
     console.log('📄 PDF Request - Token present:', !!token);
@@ -219,7 +512,7 @@ exports.generatePDF = async (req, res) => {
       });
     }
 
-    // ─── Verify token ───
+    // Verify token
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -232,7 +525,7 @@ exports.generatePDF = async (req, res) => {
       });
     }
 
-    // ─── Get user from database ───
+    // Get user from database
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: { leading: true, assisting: true },
@@ -246,7 +539,7 @@ exports.generatePDF = async (req, res) => {
       });
     }
 
-    // ─── Get report ───
+    // Get report
     const report = await prisma.monthlyReport.findUnique({
       where: { id },
       include: {
@@ -267,7 +560,7 @@ exports.generatePDF = async (req, res) => {
       });
     }
 
-    // ─── Check authorization ───
+    // Check authorization
     const userFellowshipId = user.leading?.id || user.assisting?.id;
     const isAuthorized = 
       user.role === 'ADMIN' || 
@@ -288,7 +581,7 @@ exports.generatePDF = async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    // ─── Generate PDF ───
+    // Generate PDF
     const pdfBuffer = await generatePDFBuffer(id);
     res.send(pdfBuffer);
     
@@ -302,5 +595,89 @@ exports.generatePDF = async (req, res) => {
         error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
+  }
+};
+
+// ─── Export CSV ────────────────────────────────────────────────
+exports.exportCSV = async (req, res) => {
+  try {
+    const { role } = req.user;
+    if (role !== 'HOD' && role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only HOD or Admin can export CSV.',
+      });
+    }
+
+    const { monthYear } = req.query;
+    const targetMonth = monthYear || new Date().toISOString().slice(0, 7);
+
+    const reports = await prisma.monthlyReport.findMany({
+      where: { monthYear: targetMonth },
+      include: { fellowship: true },
+      orderBy: { fellowship: { name: 'asc' } },
+    });
+
+    let csv = 'Fellowship,Month,Week1,Week2,Week3,Week4,Week5,Status\n';
+    reports.forEach((r) => {
+      csv += `${r.fellowship.name},${r.monthYear},${r.week1Count},${r.week2Count},${r.week3Count},${r.week4Count},${r.week5Count},${r.status}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=reports_${targetMonth}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error('CSV Export Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export CSV.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// ─── Get Single Report by ID ──────────────────────────────────
+exports.getReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, role, fellowshipId: userFellowshipId } = req.user;
+
+    const report = await prisma.monthlyReport.findUnique({
+      where: { id },
+      include: {
+        fellowship: {
+          include: {
+            leader: true,
+            associate: true,
+          },
+        },
+      },
+    });
+
+    if (!report) {
+      return res.status(404).json({ success: false, message: 'Report not found.' });
+    }
+
+    // Check authorization
+    const isAuthorized = 
+      role === 'ADMIN' || 
+      role === 'HOD' || 
+      userFellowshipId === report.fellowshipId;
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this report.',
+      });
+    }
+
+    res.status(200).json({ success: true, data: report });
+  } catch (error) {
+    console.error('Get Report By ID Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch report.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };

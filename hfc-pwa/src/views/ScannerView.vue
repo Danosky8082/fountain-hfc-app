@@ -89,12 +89,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { Html5Qrcode } from 'html5-qrcode';
 import api from '../services/api';
+import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const scanResult = ref(null);
 const scanError = ref(null);
 const manualMemberId = ref('');
@@ -104,6 +106,9 @@ const allMembers = ref([]);
 const searching = ref(false);
 const noResults = ref(false);
 let html5QrCode = null;
+
+// ─── Get user's fellowship ID ──────────────────────────────────
+const fellowshipId = computed(() => authStore.fellowship?.id);
 
 const goBack = () => {
   stopScanner();
@@ -132,15 +137,48 @@ const stopScanner = async () => {
   }
 };
 
-// ─── Fetch all members for search ──────────────────────────────
+// ─── Fetch members from user's fellowship ──────────────────────
 const fetchMembers = async () => {
   try {
-    const response = await api.get('/admin/members');
+    // Use the /fellowship/members endpoint which is accessible to FL users
+    const response = await api.get(`/fellowship/members?fellowshipId=${fellowshipId.value}`);
     if (response.data.success) {
-      allMembers.value = response.data.data;
+      allMembers.value = response.data.data.map(m => ({
+        ...m,
+        isPresent: false // Will be updated when fetching attendance
+      }));
+      console.log(`✅ Loaded ${allMembers.value.length} members`);
     }
   } catch (error) {
     console.error('Failed to fetch members:', error);
+    if (error.response?.status === 403) {
+      alert('❌ You do not have permission to view members. Please contact your administrator.');
+    } else if (error.response?.status === 400) {
+      alert('❌ Please select a fellowship first.');
+    } else {
+      alert('❌ Failed to load members. Please try again.');
+    }
+  }
+};
+
+// ─── Fetch current attendance status ──────────────────────────
+const fetchAttendanceStatus = async () => {
+  try {
+    const response = await api.get(`/attendance/current-session?fellowshipId=${fellowshipId.value}`);
+    if (response.data.success) {
+      const presentMembers = response.data.data.members || [];
+      // Update isPresent status for each member
+      allMembers.value = allMembers.value.map(member => {
+        const found = presentMembers.find(pm => pm.id === member.id);
+        return {
+          ...member,
+          isPresent: found?.isPresent || false
+        };
+      });
+      console.log(`✅ Attendance status updated`);
+    }
+  } catch (error) {
+    console.error('Failed to fetch attendance status:', error);
   }
 };
 
@@ -158,7 +196,6 @@ const searchMembers = () => {
   noResults.value = false;
 
   try {
-    // Search by fullName or memberNumber or id
     const results = allMembers.value.filter(member => {
       const nameMatch = member.fullName?.toLowerCase().includes(query);
       const numberMatch = member.memberNumber?.toLowerCase().includes(query);
@@ -166,7 +203,6 @@ const searchMembers = () => {
       return nameMatch || numberMatch || idMatch;
     });
 
-    // Sort results: exact matches first, then partial matches
     results.sort((a, b) => {
       const aName = a.fullName?.toLowerCase() || '';
       const bName = b.fullName?.toLowerCase() || '';
@@ -177,7 +213,7 @@ const searchMembers = () => {
       return aName.localeCompare(bName);
     });
 
-    searchResults.value = results.slice(0, 10); // Limit to 10 results
+    searchResults.value = results.slice(0, 10);
     noResults.value = results.length === 0;
   } catch (error) {
     console.error('Search error:', error);
@@ -202,13 +238,12 @@ const selectMember = async (member) => {
     
     if (response.data.success) {
       alert(`✅ ${member.fullName} checked in successfully!`);
-      // Update the member's status locally
+      // Update status
       member.isPresent = true;
       searchQuery.value = '';
       searchResults.value = [];
       noResults.value = false;
-      // Refresh the list
-      await fetchMembers();
+      await fetchAttendanceStatus();
     } else {
       alert('❌ Failed: ' + (response.data.message || 'Check-in failed.'));
     }
@@ -266,9 +301,7 @@ const markPresent = async () => {
       const name = memberName || response.data.data?.member?.fullName || 'Member';
       alert(`✅ ${name} checked in successfully!`);
       scanResult.value = null;
-      
-      // Refresh member list to update status
-      await fetchMembers();
+      await fetchAttendanceStatus();
       
       // Restart scanner
       if (html5QrCode && !html5QrCode.isScanning) {
@@ -313,8 +346,7 @@ const markManualPresent = async () => {
     if (response.data.success) {
       alert('✅ Check-in successful!');
       manualMemberId.value = '';
-      // Refresh member list to update status
-      await fetchMembers();
+      await fetchAttendanceStatus();
     } else {
       alert('❌ Failed: ' + (response.data.message || 'Check-in failed.'));
     }
@@ -330,8 +362,13 @@ onMounted(async () => {
   updateQrboxSize();
   window.addEventListener('resize', updateQrboxSize);
 
-  // Fetch members for search
-  await fetchMembers();
+  // Fetch members and attendance status
+  if (fellowshipId.value) {
+    await fetchMembers();
+    await fetchAttendanceStatus();
+  } else {
+    alert('⚠️ No fellowship assigned to your account. Please contact your administrator.');
+  }
 
   // Camera initialization
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {

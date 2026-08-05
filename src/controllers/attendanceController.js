@@ -9,23 +9,9 @@ const getCurrentSunday = () => {
   const sunday = new Date(now);
   sunday.setDate(diff);
   sunday.setHours(0, 0, 0, 0);
-  sunday.setMinutes(0, 0, 0); // Ensure time is exactly midnight
+  sunday.setMinutes(0, 0, 0);
+  sunday.setSeconds(0, 0);
   return sunday;
-};
-
-// ─── Helper: Get the Sunday for a specific week ──────────────────
-const getSundayForWeek = (year, month, weekNumber) => {
-  // Find first day of month
-  const firstDay = new Date(year, month, 1);
-  // Find first Sunday of the month
-  const firstSunday = new Date(firstDay);
-  const dayOfWeek = firstDay.getDay();
-  firstSunday.setDate(firstDay.getDate() + (7 - dayOfWeek) % 7);
-  // Add weeks
-  const targetSunday = new Date(firstSunday);
-  targetSunday.setDate(firstSunday.getDate() + (weekNumber - 1) * 7);
-  targetSunday.setHours(0, 0, 0, 0);
-  return targetSunday;
 };
 
 // ─── Helper: Get week number based on Sunday date ────────────────
@@ -48,35 +34,32 @@ const getCurrentWeekInfo = () => {
   const weekNumber = getWeekNumber(sunday);
   const monthYear = sunday.toISOString().slice(0, 7);
   
-  // Format date for display
-  const formattedDate = sunday.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
-  });
-  
-  console.log(`📅 Current week: ${weekNumber}, Sunday date: ${sunday.toISOString().split('T')[0]} (${formattedDate})`);
+  console.log(`📅 Current week: ${weekNumber}, Sunday date: ${sunday.toISOString().split('T')[0]}`);
   
   return {
     weekNumber,
     monthYear,
     meetingDate: sunday,
-    formattedDate: formattedDate,
     year: sunday.getFullYear(),
     month: sunday.getMonth(),
   };
 };
 
-// ─── Helper: Get week info for a specific week ──────────────────
-const getWeekInfoForWeek = (year, month, weekNumber) => {
-  const sunday = getSundayForWeek(year, month, weekNumber);
-  const monthYear = `${year}-${String(month + 1).padStart(2, '0')}`;
-  
-  return {
-    weekNumber,
-    monthYear,
-    meetingDate: sunday,
-  };
+// ─── Helper: Get Sunday for a specific week ──────────────────────
+const getSundayForWeek = (year, month, weekNumber) => {
+  // Find first day of month
+  const firstDay = new Date(year, month, 1);
+  // Find first Sunday of the month
+  const firstSunday = new Date(firstDay);
+  const dayOfWeek = firstDay.getDay();
+  firstSunday.setDate(firstDay.getDate() + (7 - dayOfWeek) % 7);
+  // Add weeks
+  const targetSunday = new Date(firstSunday);
+  targetSunday.setDate(firstSunday.getDate() + (weekNumber - 1) * 7);
+  targetSunday.setHours(0, 0, 0, 0);
+  targetSunday.setMinutes(0, 0, 0);
+  targetSunday.setSeconds(0, 0);
+  return targetSunday;
 };
 
 // ─── Helper: Refresh report counts ──────────────────────────────
@@ -210,12 +193,15 @@ exports.getOrCreateCurrentSession = async (req, res) => {
       }
     }
 
+    // ─── Get current week info (Sunday date) ───
     const weekInfo = getCurrentWeekInfo();
     const { weekNumber, monthYear, meetingDate } = weekInfo;
 
     console.log(`📊 [SESSION] Getting session for fellowship ${targetFellowshipId}`);
     console.log(`📅 [SESSION] Week ${weekNumber}, Month ${monthYear}, Sunday ${meetingDate.toISOString().split('T')[0]}`);
 
+    // ─── IMPORTANT: Use the CORRECT Sunday date for ALL fellowships ───
+    // Always use the calculated Sunday date, not the current date
     let session = await prisma.attendanceSession.findUnique({
       where: {
         fellowshipId_weekNumber_monthYear: {
@@ -232,13 +218,15 @@ exports.getOrCreateCurrentSession = async (req, res) => {
     });
 
     if (!session) {
-      console.log(`📝 [SESSION] Creating new session for week ${weekNumber} with meeting date ${meetingDate.toISOString().split('T')[0]}`);
+      console.log(`📝 [SESSION] Creating new session for fellowship ${targetFellowshipId}`);
+      console.log(`📅 [SESSION] Using meeting date: ${meetingDate.toISOString().split('T')[0]}`);
+      
       session = await prisma.attendanceSession.create({
         data: {
           fellowshipId: targetFellowshipId,
           weekNumber: weekNumber,
           monthYear: monthYear,
-          meetingDate: meetingDate,
+          meetingDate: meetingDate, // ← Using the calculated Sunday date
         },
         include: {
           records: {
@@ -325,6 +313,7 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
+    // ─── Get current week info (Sunday date) ───
     const weekInfo = getCurrentWeekInfo();
     const { weekNumber, monthYear, meetingDate } = weekInfo;
 
@@ -429,6 +418,7 @@ exports.submitWeek = async (req, res) => {
     const { fellowshipId: userFellowshipId, userId, role } = req.user;
     const force = req.body.force === true;
     
+    // ─── Get current week info (Sunday date) ───
     const weekInfo = getCurrentWeekInfo();
     const { weekNumber, monthYear, meetingDate } = weekInfo;
 
@@ -483,6 +473,7 @@ exports.submitWeek = async (req, res) => {
       });
     }
 
+    // Check missing previous weeks
     const missingWeeks = [];
     for (let week = 1; week < weekNumber; week++) {
       const existing = await prisma.attendanceSession.findUnique({
@@ -511,6 +502,7 @@ exports.submitWeek = async (req, res) => {
     if (force && missingWeeks.length > 0) {
       console.log(`📝 [SUBMIT] Force submitting with ${missingWeeks.length} missing weeks`);
       for (const week of missingWeeks) {
+        // ─── Calculate the Sunday for the missing week ───
         const missingSunday = getSundayForWeek(meetingDate.getFullYear(), meetingDate.getMonth(), week);
         await createSubmittedSession(targetFellowshipId, week, monthYear, missingSunday);
         console.log(`✅ [SUBMIT] Auto-created Week ${week} (zero attendance) on ${missingSunday.toISOString().split('T')[0]}`);

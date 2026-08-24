@@ -17,7 +17,6 @@
     <div v-else-if="session">
       <div class="card mb-3">
         <div class="card-body">
-          <!-- FIX: Format the date here -->
           <h5>Week {{ session.weekNumber }} – {{ formatDate(session.meetingDate) }}</h5>
           <p>Total Present: <strong>{{ session.totalPresent }}</strong></p>
           <button
@@ -70,7 +69,6 @@ const formatDate = (dateString) => {
   if (!dateString) return '—';
   try {
     const date = new Date(dateString);
-    // Format as "Aug 2, 2026"
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric', 
@@ -161,19 +159,19 @@ const submitWeek = async () => {
   } catch (error) {
     console.error('Error submitting week:', error);
     
-    // Check if it's a missing weeks error
+    // ✅ Check if it's a missing weeks error
     if (error.response?.data?.missingWeeks) {
       const missingWeeks = error.response.data.missingWeeks.join(', ');
       const confirmForce = confirm(
         `⚠️ You are missing submissions for Week(s) ${missingWeeks}.\n\n` +
-        `Do you want to continue submitting Week ${session.value.weekNumber}?\n` +
+        `Do you want to continue submitting Week ${session.value?.weekNumber || ''}?\n` +
         `Missing weeks will be marked with zero attendance.`
       );
       
       if (confirmForce) {
         try {
           const forceResponse = await api.post('/attendance/submit-week', { 
-            fellowshipId, 
+            fellowshipId: selectedFellowshipId.value || authStore.fellowship?.id,
             force: true 
           });
           if (forceResponse.data.success) {

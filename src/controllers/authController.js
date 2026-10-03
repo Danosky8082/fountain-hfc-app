@@ -141,7 +141,9 @@ exports.requestOTP = async (req, res) => {
     console.log('📧 Email found:', user.email);
 
     const otp = generateOTP();
-    console.log('🔑 Generated OTP:', otp);
+    if (process.env.NODE_ENV !== 'production') {
+  console.log('🔑 Generated OTP:', otp);
+}
 
     const hashedOtp = await bcrypt.hash(otp, 10);
 
